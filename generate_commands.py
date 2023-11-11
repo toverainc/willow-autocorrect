@@ -6,12 +6,11 @@ import typesense
 HA_URL = config('HA_URL', default="http://homeassistant.local:8123", cast=str)
 HA_TOKEN = config('HA_TOKEN', default=None, cast=str)
 
-#HA_URL = f'{HA_URL}/api/conversation/process'
 HA_TOKEN = f'Bearer {HA_TOKEN}'
 
 TYPESENSE_API_KEY = config('TYPESENSE_API_KEY', default='testing', cast=str)
-TYPESENSE_HOST = config('TYPESENSE_HOST', default='localhost', cast=str)
-TYPESENSE_PORT = config('TYPESENSE_PORT', default=9001, cast=int)
+TYPESENSE_HOST = config('TYPESENSE_HOST', default='127.0.0.1', cast=str)
+TYPESENSE_PORT = config('TYPESENSE_PORT', default=8108, cast=int)
 
 # Typesense
 ts_client = typesense.Client({
