@@ -157,31 +157,35 @@ def learn_command(command):
         log.info(f"WAC already knows command '{command}'")
 
 def parse_ha(response):
-    log.debug(str(response))
-    speech = json_get(response, "/response/speech/plain/speech", str)
-    status = json_get(response, "/response/response_type", str)
-    code = json_get_default(response, "/response/data/code", "intent_match")
+    speech = "No Willow auto correct match"
+    success = False
+    if response is not None:
+        log.debug(str(response))
+        speech = json_get(response, "/response/speech/plain/speech", str)
+        status = json_get(response, "/response/response_type", str)
+        code = json_get_default(response, "/response/data/code", "intent_match")
 
-    if code == "no_intent_match":
-        speech = "No Willow auto correct match"
-        success = False
-    else:
-        success = True
+        if code == "no_intent_match":
+            speech = "No Willow auto correct match"
+            success = False
+        else:
+            success = True
     
     return success, speech
 
 def do_ha(text, language):
+    response = None
     data = {"text": text, "language": language}
-    response = requests.post(HA_URL, headers=ha_headers, json=data)
-    log.debug(str(response))
-    response = response.json()
-    success, speech = parse_ha(response)
+    ha_response = requests.post(HA_URL, headers=ha_headers, json=data)
+    log.debug(str(ha_response))
+    ha_response_json = ha_response.json()
+    success, speech = parse_ha(ha_response_json)
     if success:
         log.info(f"HA Returned intent match on command '{text}' - learning")
         learn_command(text)
         response = speech
-    else:
-        response = do_tgi(text, speech)
+    #else:
+    #    response = do_tgi(text, speech)
 
     return response
 
@@ -236,12 +240,13 @@ def do_wac_search(command, raw = False, json = False, distance = 5, num_results 
         return results
 
 def match_route(text, language):
-    if "what time" in text:
-        return get_time()
-    elif "date" in text:
-        return get_date()
+    ha_result = do_ha(text, language)
+    if ha_result:
+        return ha_result
     else:
-        return do_ha(text, language)
+        text = do_wac_search(text, raw = False, json = False, distance = 5, num_results = 5)
+        ha_result = do_ha(text, language)
+    return ha_result
 
 @app.get("/")
 def read_root():
