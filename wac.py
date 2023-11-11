@@ -23,6 +23,10 @@ TYPESENSE_PORT = config('TYPESENSE_PORT', default=8108, cast=int)
 HA_URL = f'{HA_URL}/api/conversation/process'
 HA_TOKEN = f'Bearer {HA_TOKEN}'
 
+# The number of matching tokens to consider a successful WAC search
+WAC_TOKEN_MATCH_THRESHOLD = config(
+    'WAC_TOKEN_MATCH_THRESHOLD', default=3, cast=int)
+
 logging.basicConfig(
     format='%(asctime)s %(levelname)-8s %(message)s',
     level=logging.INFO,
@@ -64,6 +68,7 @@ def wac_search(command, exact_match=False, distance=2, num_results=5):
     # Set fail by default
     success = False
     wac_command = command
+    tokens_matched = 0
     search_parameters = {
         'q': command,
         'query_by': 'command',
@@ -93,9 +98,16 @@ def wac_search(command, exact_match=False, distance=2, num_results=5):
             wac_search_result, "/hits[0]/text_match_info/tokens_matched")
         wac_command = json_get(wac_search_result, "/hits[0]/document/command")
         source = json_get(wac_search_result, "/hits[0]/document/source")
-        success = True
     except:
         pass
+
+    if tokens_matched >= WAC_TOKEN_MATCH_THRESHOLD:
+        log.info(
+            f"WAC Search passed token threshold {WAC_TOKEN_MATCH_THRESHOLD} with {tokens_matched}")
+        success = True
+    else:
+        log.info(
+            f"WAC Search failed token threshold {WAC_TOKEN_MATCH_THRESHOLD} with {tokens_matched}")
 
     return success, wac_command
 
@@ -141,9 +153,9 @@ def api_post_proxy_handler(command, language):
             ha_response, "/response/data/code", "intent_match")
 
         if code == "no_intent_match":
-            log.info('No HA Intent Match')
+            log.info('No Initial HA Intent Match')
         else:
-            log.info('HA Intent Match')
+            log.info('Initial HA Intent Match')
             wac_add(command)
             # Set speech to HA response and return
             log.info('Setting speech to HA response')
@@ -181,6 +193,7 @@ def api_post_proxy_handler(command, language):
         except:
             pass
 
+    log.info(f'Final speech response: {speech}')
     return speech
 
 
