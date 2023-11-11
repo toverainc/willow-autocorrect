@@ -59,8 +59,11 @@ typesense_client = typesense.Client({
 # WAC Search
 
 
-def wac_search(command, distance=2, num_results=5):
+def wac_search(command, exact_match=False, distance=2, num_results=5):
     log.info(f"WAC Search distance is {distance}")
+    # Set fail by default
+    success = False
+    wac_command = command
     search_parameters = {
         'q': command,
         'query_by': 'command',
@@ -76,6 +79,10 @@ def wac_search(command, distance=2, num_results=5):
         'per_page': num_results
     }
 
+    if exact_match:
+        log.info(f"Doing exact match WAC Search")
+        search_parameters.update({'filter_by': f'command:={command}'})
+
     # Try WAC search
     try:
         log.info(f"Doing WAC Search for command: {command}")
@@ -86,12 +93,11 @@ def wac_search(command, distance=2, num_results=5):
             wac_search_result, "/hits[0]/text_match_info/tokens_matched")
         wac_command = json_get(wac_search_result, "/hits[0]/document/command")
         source = json_get(wac_search_result, "/hits[0]/document/source")
+        success = True
     except:
-        log.info(
-            f"WAC Search for command: {command} failed - returning original")
-        wac_command = command
+        pass
 
-    return wac_command
+    return success, wac_command
 
 # WAC Add
 
@@ -99,6 +105,13 @@ def wac_search(command, distance=2, num_results=5):
 def wac_add(command):
     log.info(f"Doing WAC Add for command: {command}")
     try:
+        log.info(f"Search WAC before adding command: {command}")
+        wac_exact_search_status, wac_command = wac_search(
+            command, exact_match=True)
+        if wac_exact_search_status is True:
+            log.info('Not adding duplicate command')
+            return
+
         command_json = {
             'command': command,
             'rank': 1.0,
@@ -106,6 +119,7 @@ def wac_add(command):
         }
         # Use create to update in real time
         typesense_client.collections['commands'].documents.create(command_json)
+        log.info(f'Added WAC command: {command}')
     except:
         log.error(f"WAC Add for command: {command} failed!")
 
@@ -137,30 +151,35 @@ def api_post_proxy_handler(command, language):
                 ha_response, "/response/speech/plain/speech", str)
             return speech
     except:
-        speech = "HA Failed"
+        pass
 
     # Do WAC Search
-    wac_command = wac_search(command, distance=2, num_results=5)
+    wac_success, wac_command = wac_search(
+        command, exact_match=False, distance=2, num_results=5)
 
-    # Re-run HA with WAC Command
-    try:
-        ha_data = {"text": wac_command, "language": language}
-        ha_response = requests.post(HA_URL, headers=ha_headers, json=ha_data)
-        ha_response = ha_response.json()
-        code = json_get_default(
-            ha_response, "/response/data/code", "intent_match")
+    if wac_success:
 
-        if code == "no_intent_match":
-            log.info('No WAC Command HA Intent Match')
-        else:
-            log.info('WAC Command HA Intent Match')
+        # Re-run HA with WAC Command
+        try:
+            ha_data = {"text": wac_command, "language": language}
+            ha_response = requests.post(
+                HA_URL, headers=ha_headers, json=ha_data)
+            ha_response = ha_response.json()
+            code = json_get_default(
+                ha_response, "/response/data/code", "intent_match")
 
-        # Set speech to HA response - whatever it is at this point
-        log.info('Setting speech to HA response')
-        speech = json_get(ha_response, "/response/speech/plain/speech", str)
+            if code == "no_intent_match":
+                log.info(f'No WAC Command HA Intent Match: {wac_command}')
+            else:
+                log.info(f'WAC Command HA Intent Match: {wac_command}')
 
-    except:
-        speech = "WAC HA Failed"
+            # Set speech to HA response - whatever it is at this point
+            log.info('Setting speech to HA response')
+            speech = json_get(
+                ha_response, "/response/speech/plain/speech", str)
+
+        except:
+            pass
 
     return speech
 

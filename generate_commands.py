@@ -13,31 +13,34 @@ TYPESENSE_API_KEY = config('TYPESENSE_API_KEY', default='testing', cast=str)
 TYPESENSE_HOST = config('TYPESENSE_HOST', default='127.0.0.1', cast=str)
 TYPESENSE_PORT = config('TYPESENSE_PORT', default=8108, cast=int)
 
+print(f'{TYPESENSE_HOST} {TYPESENSE_PORT}')
+
 # Typesense
 ts_client = typesense.Client({
-  'nodes': [{
-    'host': TYPESENSE_HOST,
-    'port': TYPESENSE_PORT,
-    'protocol': 'http'
-  }],
-  'api_key': TYPESENSE_API_KEY,
-  'connection_timeout_seconds': 2
+    'nodes': [{
+        'host': TYPESENSE_HOST,
+        'port': TYPESENSE_PORT,
+        'protocol': 'http'
+    }],
+    'api_key': TYPESENSE_API_KEY,
+    'connection_timeout_seconds': 2
 })
 
 commands_schema = {
-  'name': 'commands',
-  'fields': [
-    {'name': 'command', 'type': 'string', "sort": True},
-    {'name': 'rank', 'type': 'float' },
-    {'name': 'is_alias', 'type': 'bool', 'optional': True },
-    {'name': 'alias', 'type': 'string', 'optional': True, "sort": True},
-    {'name': 'accuracy', 'type': 'float', 'optional': True },
-    {'name': 'source', 'type': 'string', 'optional': True, "sort": True },
+    'name': 'commands',
+    'fields': [
+        {'name': 'command', 'type': 'string', "sort": True},
+        {'name': 'rank', 'type': 'float'},
+        {'name': 'is_alias', 'type': 'bool', 'optional': True},
+        {'name': 'alias', 'type': 'string', 'optional': True, "sort": True},
+        {'name': 'accuracy', 'type': 'float', 'optional': True},
+        {'name': 'source', 'type': 'string', 'optional': True, "sort": True},
 
-  ],
-  'default_sorting_field': 'rank',
-  "token_separators": [".", "-"]
+    ],
+    'default_sorting_field': 'rank',
+    "token_separators": [".", "-"]
 }
+
 
 def add_entities():
     print('Adding entities from HA')
@@ -85,15 +88,16 @@ def add_entities():
             'command': on,
             'rank': 2.0,
             'source': 'ha_entity',
-            }
+        }
         command_off = {
             'command': off,
             'rank': 2.0,
             'source': 'ha_entity',
-            } 
+        }
 
         ts_client.collections['commands'].documents.create(command_on)
         ts_client.collections['commands'].documents.create(command_off)
+
 
 # For testing
 try:
@@ -108,7 +112,6 @@ try:
 except:
     print('No collections found - creating commands schema')
     ts_client.collections.create(commands_schema)
-    #add_entities()
+    # add_entities()
 else:
     print('Already have entities')
-
