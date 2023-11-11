@@ -190,6 +190,7 @@ def do_ha(text, language):
     return response
 
 def wac_search(command, distance = 2, num_results = 5):
+    log.info(f'WAC Search distance is {distance}')
     search_parameters = {
   'q'         : command,
   'query_by'  : 'command',
@@ -200,6 +201,8 @@ def wac_search(command, distance = 2, num_results = 5):
   'typo_tokens_threshold': 2,
   'split_join_tokens': 'fallback',
   'num_typos' : distance,
+  'min_len_1typo': 1,
+  'min_len_2typo': 1,
   'per_page' : num_results
 }
     return ts_client.collections['commands'].documents.search(search_parameters)
@@ -207,10 +210,12 @@ def wac_search(command, distance = 2, num_results = 5):
 def get_first_command(command, results, distance, search_time, json = False):
     first_result = None
     first_result_source = None
+    tokens_matched = 0
+    text_score = 0
     try:
         text_score = json_get(results, "/hits[0]/text_match")
         tokens_matched = json_get(results, "/hits[0]/text_match_info/tokens_matched")
-        if tokens_matched <= 1:
+        if tokens_matched <= 2:
             return
         first_result = json_get(results, "/hits[0]/document/command")
         first_result_source = json_get(results, "/hits[0]/document/source")
