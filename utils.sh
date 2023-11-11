@@ -13,6 +13,9 @@ TS_DIR=$PWD/data/ts
 # Not really used yet
 WAC_DB=$PWD/data/wac.db
 
+WAC_PORT=${WAC_PORT:-9000}
+TYPESENSE_PORT=${TYPESENSE_PORT:-8108}
+
 set +a
 
 # Just in case
@@ -29,7 +32,7 @@ gen_commands|gc)
 ;;
 
 run)
-    docker run --rm -it -p 9000:9000 -v $PWD:/app -e WAC_DB -e TYPESENSE_API_KEY "$IMAGE":"$TAG"
+    docker run --rm -it -p "$WAC_PORT":9000 -v $PWD:/app -e WAC_DB -e TYPESENSE_API_KEY "$IMAGE":"$TAG"
 ;;
 
 shell)
@@ -39,7 +42,7 @@ shell)
 ts)
     mkdir -p $TS_DIR
 
-    docker run --rm -it -p 8108:8108 \
+    docker run --rm -it -p "$TYPESENSE_PORT":8108 \
         -v"$TS_DIR":/data "$TYPESENSE" \
         --data-dir /data \
         --api-key="$TYPESENSE_API_KEY"
