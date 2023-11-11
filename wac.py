@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse, PlainTextResponse
 from jsonget import json_get, json_get_default
 from typing import Optional
@@ -6,13 +6,7 @@ import json
 import logging
 import requests
 
-# For typesense-server
-import subprocess
-import time
-import threading
-
 from datetime import datetime
-from zoneinfo import ZoneInfo
 from decouple import config
 import typesense
 
@@ -47,39 +41,134 @@ try:
 except:
     pass
 
+# Basic stuff we need
 ha_headers = {
     "Authorization": HA_TOKEN,
 }
 
+typesense_client = typesense.Client({
+    'nodes': [{
+        'host': TYPESENSE_HOST,
+        'port': TYPESENSE_PORT,
+        'protocol': 'http'
+    }],
+    'api_key': TYPESENSE_API_KEY,
+    'connection_timeout_seconds': 1
+})
+
+# WAC Search
+
+
+def wac_search(command, distance=2, num_results=5):
+    log.info(f"WAC Search distance is {distance}")
+    search_parameters = {
+        'q': command,
+        'query_by': 'command',
+        'sort_by': '_text_match:desc,rank:desc',
+        'text_match_type': 'max_score',
+        'prioritize_token_position': False,
+        'drop_tokens_threshold': 1,
+        'typo_tokens_threshold': 2,
+        'split_join_tokens': 'fallback',
+        'num_typos': distance,
+        'min_len_1typo': 1,
+        'min_len_2typo': 1,
+        'per_page': num_results
+    }
+
+    # Try WAC search
+    try:
+        log.info(f"Doing WAC Search for command: {command}")
+        wac_search_result = typesense_client.collections['commands'].documents.search(
+            search_parameters)
+        text_score = json_get(wac_search_result, "/hits[0]/text_match")
+        tokens_matched = json_get(
+            wac_search_result, "/hits[0]/text_match_info/tokens_matched")
+        wac_command = json_get(wac_search_result, "/hits[0]/document/command")
+        source = json_get(wac_search_result, "/hits[0]/document/source")
+    except:
+        log.info(
+            f"WAC Search for command: {command} failed - returning original")
+        wac_command = command
+
+    return wac_command
+
+# WAC Add
+
+
+def wac_add(command):
+    log.info(f"Doing WAC Add for command: {command}")
+    try:
+        command_json = {
+            'command': command,
+            'rank': 1.0,
+            'source': 'autolearn',
+        }
+        # Use create to update in real time
+        typesense_client.collections['commands'].documents.create(command_json)
+    except:
+        log.error(f"WAC Add for command: {command} failed!")
+
+    return
+
 # Request coming from proxy
-def api_post_proxy_handler(text, language):
+
+
+def api_post_proxy_handler(command, language):
 
     # Init speech for when all else goes wrong
     speech = "Sorry, I don't know that command."
 
-    data = {"text": text, "language": language}
     try:
-        ha_response = requests.post(HA_URL, headers=ha_headers, json=data)
+        ha_data = {"text": command, "language": language}
+        ha_response = requests.post(HA_URL, headers=ha_headers, json=ha_data)
         ha_response = ha_response.json()
-        code = json_get_default(ha_response, "/response/data/code", "intent_match")
+        code = json_get_default(
+            ha_response, "/response/data/code", "intent_match")
 
         if code == "no_intent_match":
             log.info('No HA Intent Match')
         else:
             log.info('HA Intent Match')
+            wac_add(command)
+            # Set speech to HA response and return
+            log.info('Setting speech to HA response')
+            speech = json_get(
+                ha_response, "/response/speech/plain/speech", str)
+            return speech
+    except:
+        speech = "HA Failed"
 
-        # Set speech to HA response
+    # Do WAC Search
+    wac_command = wac_search(command, distance=2, num_results=5)
+
+    # Re-run HA with WAC Command
+    try:
+        ha_data = {"text": wac_command, "language": language}
+        ha_response = requests.post(HA_URL, headers=ha_headers, json=ha_data)
+        ha_response = ha_response.json()
+        code = json_get_default(
+            ha_response, "/response/data/code", "intent_match")
+
+        if code == "no_intent_match":
+            log.info('No WAC Command HA Intent Match')
+        else:
+            log.info('WAC Command HA Intent Match')
+
+        # Set speech to HA response - whatever it is at this point
         log.info('Setting speech to HA response')
         speech = json_get(ha_response, "/response/speech/plain/speech", str)
 
     except:
-        speech = "HA Failed"
+        speech = "WAC HA Failed"
 
     return speech
+
 
 @app.get("/")
 def read_root():
     return {"Hello": "World"}
+
 
 @app.post("/proxy")
 async def api_post_proxy(request: Request):
