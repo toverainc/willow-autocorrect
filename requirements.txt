@@ -1,0 +1,6 @@
+fastapi
+json-get
+uvicorn
+python-decouple
+typesense
+uvloop
