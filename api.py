@@ -140,32 +140,33 @@ def do_ha(text, language):
 
     return response
 
-def wac_search(command):
+def wac_search(command, distance = 5, num_results = 5):
     search_parameters = {
   'q'         : command,
   'query_by'  : 'command',
   'sort_by'   : '_text_match:desc',
-  'num_typos' : 5,
-  'per_page' : 5
+  'num_typos' : distance,
+  'per_page' : num_results
 }
     return ts_client.collections['commands'].documents.search(search_parameters)
 
-def get_first_command(results, json = False):
+def get_first_command(command, results, search_time, json = False):
     try:
         first_result = json_get(results, "/hits[0]/document/command")
         first_result_source = json_get(results, "/hits[0]/document/source")
     except:
         first_result = None
+        first_result_source = None
     
     if json:
-        return {'command': first_result, 'source': first_result_source}
+        return {'input': command, 'command': first_result, 'source': first_result_source, 'search_time': search_time}
     else:
         return first_result
 
-def do_wac_search(command, raw = False, json = False):
+def do_wac_search(command, raw = False, json = False, distance = 5, num_results = 5):
     # Search
     time_start = datetime.now()
-    results = wac_search(command)
+    results = wac_search(command, distance, num_results)
     time_end = datetime.now()
     search_time = time_end - time_start
     search_time_milliseconds = search_time.total_seconds() * 1000
@@ -175,7 +176,7 @@ def do_wac_search(command, raw = False, json = False):
     if raw:
         return results
     else:
-        results = get_first_command(results, json)
+        results = get_first_command(command, results, search_time_milliseconds, json)
         log.info(f'WAC matched: {results}')
         return results
 
@@ -192,9 +193,9 @@ def read_root():
     return {"Hello": "World"}
 
 @app.get("/api/search", summary="WAC Search", response_description="WAC Search Results")
-async def api_search(request: Request, command: str, raw: Optional[bool] = False, json: Optional[bool] = True):
+async def api_search(request: Request, command: str, raw: Optional[bool] = False, json: Optional[bool] = True, distance: Optional[str] = 5, num_results: Optional[str] = 5):
     log.info(f"Doing WAC search for command '{command}'")
-    results = do_wac_search(command, raw, json)
+    results = do_wac_search(command, raw, json, distance, num_results)
     if json:
         return JSONResponse(content=results)
     else:
