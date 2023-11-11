@@ -1,7 +1,8 @@
 from decouple import config
-from jsonget import json_get, json_get_default
+from jsonget import json_get
 from requests import get
 import typesense
+import json
 
 HA_URL = config('HA_URL', default="http://homeassistant.local:8123", cast=str)
 HA_TOKEN = config('HA_TOKEN', default=None, cast=str)
@@ -40,7 +41,7 @@ commands_schema = {
 
 def add_entities():
     print('Adding entities from HA')
-    entity_types = ['light.', 'switch.']
+    entity_types = ['cover.', 'fan.', 'light.', 'switch.']
 
     url = f"{HA_URL}/api/states"
     headers = {
@@ -50,6 +51,11 @@ def add_entities():
 
     response = get(url, headers=headers)
     entities = response.json()
+
+    # For dev and debugging
+    json_object = json.dumps(entities, indent=2)
+    with open("work/entities.json", "w") as outfile:
+        outfile.write(json_object)
 
     devices = []
 
@@ -65,7 +71,7 @@ def add_entities():
                     continue
                 # Add device
                 if friendly_name not in devices:
-                    devices.append(friendly_name)
+                    devices.append(friendly_name.lower())
 
     # Make the devices unique
     devices = [*set(devices)]
@@ -77,17 +83,17 @@ def add_entities():
         print(f"Adding command: '{off}'")
         command_on = {
             'command': on,
-            'rank': 1.0,
+            'rank': 2.0,
             'source': 'ha_entity',
             }
         command_off = {
             'command': off,
-            'rank': 1.0,
+            'rank': 2.0,
             'source': 'ha_entity',
             } 
 
-        ts_client.collections['commands'].documents.upsert(command_on)
-        ts_client.collections['commands'].documents.upsert(command_off)
+        ts_client.collections['commands'].documents.create(command_on)
+        ts_client.collections['commands'].documents.create(command_off)
 
 # For testing
 try:
