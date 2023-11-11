@@ -32,14 +32,17 @@ run)
     docker run --rm -it -p 9000:9000 -v $PWD:/app -e WAC_DB -e TYPESENSE_API_KEY "$IMAGE":"$TAG"
 ;;
 
+shell)
+    docker run --rm -it -v $PWD:/app -e WAC_DB -e TYPESENSE_API_KEY "$IMAGE":"$TAG" /bin/bash
+;;
+
 ts)
     mkdir -p $TS_DIR
 
-    docker run --rm -it -p 9001:8108 \
-        -v"$TS_DIR"/typesense-data:/data "$TYPESENSE" \
+    docker run --rm -it -p 8108:8108 \
+        -v"$TS_DIR":/data "$TYPESENSE" \
         --data-dir /data \
-        --enable-search-analytics \
-        --api-key=$TYPESENSE_API_KEY
+        --api-key="$TYPESENSE_API_KEY"
 ;;
 
 web)
