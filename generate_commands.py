@@ -27,12 +27,12 @@ ts_client = typesense.Client({
 commands_schema = {
   'name': 'commands',
   'fields': [
-    {'name': 'command', 'type': 'string*', 'facet': False},
+    {'name': 'command', 'type': 'string', "sort": True},
     {'name': 'rank', 'type': 'float' },
     {'name': 'is_alias', 'type': 'bool', 'optional': True },
-    {'name': 'alias', 'type': 'string*', 'optional': True, 'facet': False},
+    {'name': 'alias', 'type': 'string', 'optional': True, "sort": True},
     {'name': 'accuracy', 'type': 'float', 'optional': True },
-    {'name': 'source', 'type': 'string*', 'optional': True },
+    {'name': 'source', 'type': 'string', 'optional': True, "sort": True },
 
   ],
   'default_sorting_field': 'rank',
