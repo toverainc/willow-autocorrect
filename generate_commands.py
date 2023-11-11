@@ -108,7 +108,7 @@ try:
 except:
     print('No collections found - creating commands schema')
     ts_client.collections.create(commands_schema)
-    add_entities()
+    #add_entities()
 else:
     print('Already have entities')
 
