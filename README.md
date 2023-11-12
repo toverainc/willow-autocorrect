@@ -4,9 +4,9 @@ One step closer to "better than Alexa".
 ## Introduction
 Voice assistants make use of speech to text (STT/ASR) implementations like Whisper.
 While they work well, most command endpoint platforms (like Home Assistant) have pretty tight matching 
-of STT output to "intent", where intent is matching an action, device, etc - whatever the transcript/command is supposed to do.
+of STT output to "intent". Intent is matching a voice command to an action.
 
-A simple transcription error like "turn of" instead of "turn off" doesn't work. Frustrating.
+A simple speech recognition error like "turn of" instead of "turn off" doesn't work. Frustrating.
 
 Voice assistants are supposed to be convenient, fast, and easy. If you have to repeat yourself why bother?
 
@@ -20,7 +20,7 @@ That said this is a very, very early technology preview. Caveat emptor!
 
 ## Why is this a big deal?
 1) Repeating yourself is the worst.
-2) Likely get away with using a lower resource utilization Whisper model. WIS is already really fast - WIS + WAC is even faster while being much more accurate. Even on CPU!
+2) You can likely get away with using a lower resource utilization Whisper model. WIS is already really fast - WIS + WAC is even faster while being much more accurate. Even on CPU!
 3) Speak the way you do. We hesitate, mumble, and say what we mean with variety. Other people understand us. Voice assistants should too.
 
 ## Getting Started
@@ -61,10 +61,10 @@ Initially all WAC does is replace "Sorry, I didn't understand that" with "Sorry,
 
 This lets you know you're using it.
 
-Commands are passed-through to HA. When HA responds that the intent was matched the following happens:
+Commands are pass-through to HA. When HA responds that the intent was matched the following happens:
 
 1) WAC searches Typesense to make sure we don't already know about that successful command. This uses exact string search.
-2) If the matching intent command is new, add it to Typesense.
+2) If the matching intent command is new add it to Typesense.
 3) The command does what it does.
 
 If the intent isn't matched and WAC doesn't have a prior successful intent match we don't do anything other than return "Sorry, I don't know that command".
@@ -78,7 +78,7 @@ Once WAC starts learning successfully matched commands things get interesting.
 
 ### Fixing basic stuff
 
-Learned commands will make full use of Typesense distance (fuzzy) matching.
+Learned commands make full use of Typesense distance (fuzzy) matching.
 Fuzzy matching corrects things like variations in the transcript - minor variations in strings. Examples:
 
 - "Turn-on" matches "turn on"
@@ -90,18 +90,18 @@ Overall this functionality can be configured with the Levenshtein distance match
 
 There are also a variety of additional knobs to tune: look around line 110 in `wac.py` if you are interested - and that's just a start! Typesense is really on another level.
 
-We intend to incorporate early feedback to expose configuration parameters and improve defaults for when WAC is integrated with WAS.
+We intend to incorporate early feedback to expose configuration parameters and improve defaults for when WAC is integrated with WAS. All configuration options in your browser with WAS and WAS Web UI.
 
 ### Figuring out what you're actually trying to do
 
 Typesense includes "semantic search".
 
-Semantic search can recognize variations in language - it understands what you're trying to say. So for example:
+Semantic search can recognize variations in language - it understands what you're trying to say. For example:
 
 - "Turn on the lights in eating room" matches "turn on dining room".
 - "turn on upstairs desk lamps" matches "turn on upstairs desk lights"
 
-Between distance matching and semantic search WAC can match some truly wild variations in commands/STT errors:
+Between distance matching and semantic search Typesense can match some truly wild variations in commands:
 
 - "turn-of lights and eating room." becomes 'turn off dining room lights.'
 - "turn-on lights in primary toilet" becomes "turn on lights in master bathroom"
