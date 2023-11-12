@@ -39,7 +39,7 @@ Start things up:
 
 Then configure WAS via the web interface with the REST command endpoint (no auth):
 
-`http://your_machine_ip:9000/proxy`
+`http://your_machine_ip:9000/api/proxy`
 
 Save and Apply changes.
 
