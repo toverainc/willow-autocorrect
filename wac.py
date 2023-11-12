@@ -60,6 +60,7 @@ typesense_client = typesense.Client({
     'connection_timeout_seconds': 1
 })
 
+
 # WAC Search
 
 
@@ -69,7 +70,9 @@ def wac_search(command, exact_match=False, distance=2, num_results=5, raw=False)
     success = False
     wac_command = command
     tokens_matched = 0
-    search_parameters = {
+
+    # Do not change these unless you know what you are doing
+    wac_search_parameters = {
         'q': command,
         'query_by': 'command',
         'sort_by': '_text_match:desc,rank:desc',
@@ -83,16 +86,15 @@ def wac_search(command, exact_match=False, distance=2, num_results=5, raw=False)
         'min_len_2typo': 1,
         'per_page': num_results
     }
-
     if exact_match:
         log.info(f"Doing exact match WAC Search")
-        search_parameters.update({'filter_by': f'command:={command}'})
+        wac_search_parameters.update({'filter_by': f'command:={command}'})
 
     # Try WAC search
     try:
         log.info(f"Doing WAC Search for command: {command}")
         wac_search_result = typesense_client.collections['commands'].documents.search(
-            search_parameters)
+            wac_search_parameters)
         # For management API
         if raw:
             return wac_search_result
@@ -209,10 +211,12 @@ def read_root():
 
 
 @app.get("/api/wac", summary="WAC Search", response_description="WAC Search")
-async def api_get_wac(request: Request, command: str, distance: Optional[str] = 2, num_results: Optional[str] = 5, exact_match: Optional[bool] = False):
+async def api_get_wac(request: Request, command, distance: Optional[str] = 2, num_results: Optional[str] = 5, exact_match: Optional[bool] = False):
     time_start = datetime.now()
+
     results = wac_search(command, exact_match=exact_match,
                          distance=distance, num_results=num_results, raw=True)
+
     time_end = datetime.now()
     search_time = time_end - time_start
     search_time_milliseconds = search_time.total_seconds() * 1000
