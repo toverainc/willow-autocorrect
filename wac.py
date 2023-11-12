@@ -22,6 +22,7 @@ TYPESENSE_PORT = config('TYPESENSE_PORT', default=8108, cast=int)
 TYPESENSE_PROTOCOL = config('TYPESENSE_PROTOCOL', default='http', cast=str)
 TYPESENSE_TIMEOUT = config('TYPESENSE_TIMEOUT', default=1, cast=int)
 
+# HA
 HA_URL = f'{HA_URL}/api/conversation/process'
 HA_TOKEN = f'Bearer {HA_TOKEN}'
 
@@ -70,7 +71,7 @@ typesense_client = typesense.Client({
 
 # The schema for WAC commands - you really do not want to mess with this
 wac_commands_schema = {
-    'name': 'commands',
+    'name': COLLECTION,
     'fields': [
         {'name': 'command', 'type': 'string', "sort": True},
         {'name': 'rank', 'type': 'float'},
@@ -140,6 +141,7 @@ def wac_search(command, exact_match=False, distance=2, num_results=5, raw=False,
         wac_command = json_get(wac_search_result, "/hits[0]/document/command")
         source = json_get(wac_search_result, "/hits[0]/document/source")
 
+        # Almost certainly going to score vs token match
         if tokens_matched >= token_match_threshold:
             log.info(
                 f"WAC Search passed token threshold {token_match_threshold} with result {tokens_matched} from source {source}")
