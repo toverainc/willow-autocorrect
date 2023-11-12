@@ -3,10 +3,10 @@ One step closer to "better than Alexa".
 
 ## Introduction
 Voice assistants make use of speech to text (STT/ASR) implementations like Whisper.
-While they work well most command endpoint platforms (like Home Assistant) have pretty tight matching 
-of STT output to "intent", where "intent" is matching an action and device - whatever the transcript/command is supposed to do.
+While they work well, most command endpoint platforms (like Home Assistant) have pretty tight matching 
+of STT output to "intent", where intent is matching an action, device, etc - whatever the transcript/command is supposed to do.
 
-This can lead to usability issues. A simple transcription error like "turn of" instead of "turn off" does nothing.
+A simple transcription error like "turn of" instead of "turn off" doesn't work. Frustrating.
 
 Voice assistants are supposed to be convenient, fast, and easy. If you have to repeat yourself why bother?
 
@@ -14,14 +14,14 @@ Voice assistants are supposed to be convenient, fast, and easy. If you have to r
 Willow Auto Correct smooths out these STT errors by leveraging [Typesense](https://typesense.org/) to learn and fix them.
 
 Typesense as used by Willow Auto Correct combined with Willow, Willow Application Server (WAS), and Willow Inference Server (WIS)
-is a gigantic leap forward for voice assistant usability in the real world.
+is a leap forward for open-source, local, and private voice assistant usability in the real world.
 
 That said this is a very, very early technology preview. Caveat emptor!
 
 ## Why is this a big deal?
 1) Repeating yourself is the worst.
-2) Likely get away with using a lower resource-utilization Whisper model (even though WIS is really fast). Even on CPU!
-3) Speak the way you do. We hesitate, mumble, and say what we mean with variety. Other people understand us, voice assistants should too.
+2) Likely get away with using a lower resource utilization Whisper model. WIS is already really fast - WIS + WAC is even faster while being much more accurate. Even on CPU!
+3) Speak the way you do. We hesitate, mumble, and say what we mean with variety. Other people understand us. Voice assistants should too.
 
 ## Getting Started
 
@@ -53,7 +53,7 @@ This will insert WAC in between your Willow devices, WAS, and Home Assistant.
 
 DOUBLE CHECK: Make sure you have "WAS Command Endpoint (EXPERIMENTAL)" enabled under "Advanced Settings"!!!
 
-While you're being brave why don't you try WOW (Willow One Wake) and play around with notifications?
+While you're being brave why don't you try Willow One Wake (WOW) and play around with notifications?
 
 ### Learning Flow (Autolearn)
 
@@ -61,14 +61,16 @@ Initially all WAC does is replace "Sorry, I didn't understand that" with "Sorry,
 
 This lets you know you're using it.
 
-At first, commands are passed-through to HA. When HA responds that the intent was matched the following happens:
+Commands are passed-through to HA. When HA responds that the intent was matched the following happens:
 
-1) WAC searches typesense to make sure we don't already know about that successful command. This uses exact string search.
-2) If the matching intent command is new, add to typesense.
+1) WAC searches Typesense to make sure we don't already know about that successful command. This uses exact string search.
+2) If the matching intent command is new, add it to Typesense.
 3) The command does what it does.
 
 If the intent isn't matched and WAC doesn't have a prior successful intent match we don't do anything other than return "Sorry, I don't know that command".
 This is what you have today.
+
+Autolearn is a lifelong learner - even as you add entities, change their names, etc.
 
 ### Operational Flow
 
@@ -76,33 +78,35 @@ Once WAC starts learning successfully matched commands things get interesting.
 
 ### Fixing basic stuff
 
-Learned commands will make full use of typesense distance (fuzzy) matching.
-Distance matching corrects things like variations in the transcript - characters and words being moved around, etc. Examples:
+Learned commands will make full use of Typesense distance (fuzzy) matching.
+Fuzzy matching corrects things like variations in the transcript - minor variations in strings. Examples:
 
 - "Turn-on" matches "turn on"
-- "Turn-of" matches "turn off"
+- "Turn of" matches "turn off"
 
-Our typesense schema specifically includes the default of spaces plus '.' and '-'. We can alter this if need be.
+Our Typesense schema specifically includes the default of spaces plus '.' and '-'. We can alter this if need be.
 
-Overall this functionality can be configured with the Levenshtein distance matching API param `distance` which we support providing dynamically.
+Overall this functionality can be configured with the Levenshtein distance matching API param `distance`, which we support providing dynamically. What is Levenshtein distance? It's a 70 year old way to figure out how many times you need to move letters around to make two sentences match.
 
-There are also a variety of additional knobs to tune: look around line 110 in `wac.py` if you are interested - and that's just a start!
+There are also a variety of additional knobs to tune: look around line 110 in `wac.py` if you are interested - and that's just a start! Typesense is really on another level.
 
 We intend to incorporate early feedback to expose configuration parameters and improve defaults for when WAC is integrated with WAS.
 
 ### Figuring out what you're actually trying to do
 
-Typesense uses "semantic search".
+Typesense includes "semantic search".
 
-Semantic search can recognize variations in language - it understands what you "mean". So for example:
+Semantic search can recognize variations in language - it understands what you're trying to say. So for example:
 
 - "Turn on the lights in eating room" matches "turn on dining room".
 - "turn on upstairs desk lamps" matches "turn on upstairs desk lights"
 
 Between distance matching and semantic search WAC can match some truly wild variations in commands/STT errors:
 
-- "turn-of lights and eating room." becomes 'turn on dining room lights.'
+- "turn-of lights and eating room." becomes 'turn off dining room lights.'
 - "turn-on lights in primary toilet" becomes "turn on lights in master bathroom"
+
+As you can see both of these examples have multiple speech recognition errors and vocabulary/grammar variance.
 
 It's also very good about completely ignoring random speech inserted from the transcript.
 It does not care at all - it only matches on tokens from each of the provided words and ignores the rest.
