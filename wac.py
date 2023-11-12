@@ -68,6 +68,34 @@ typesense_client = typesense.Client({
     'connection_timeout_seconds': TYPESENSE_TIMEOUT
 })
 
+# The schema for WAC commands - you really do not want to mess with this
+wac_commands_schema = {
+    'name': 'commands',
+    'fields': [
+        {'name': 'command', 'type': 'string', "sort": True},
+        {'name': 'rank', 'type': 'float'},
+        {'name': 'is_alias', 'type': 'bool', 'optional': True},
+        {'name': 'alias', 'type': 'string', 'optional': True, "sort": True},
+        {'name': 'accuracy', 'type': 'float', 'optional': True},
+        {'name': 'source', 'type': 'string', 'optional': True, "sort": True},
+
+    ],
+    'default_sorting_field': 'rank',
+    "token_separators": [".", "-"]
+}
+
+
+def init_typesense():
+    try:
+        typesense_client.collections[COLLECTION].retrieve()
+    except:
+        log.info(f'WAC collection {COLLECTION} not found - initializing')
+        typesense_client.collections.create(wac_commands_schema)
+
+
+@app.on_event("startup")
+async def startup_event():
+    init_typesense()
 
 # WAC Search
 
@@ -149,6 +177,7 @@ def wac_add(command):
         log.error(f"WAC Add for command: {command} failed!")
 
     return
+
 
 # Request coming from proxy
 
