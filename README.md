@@ -19,9 +19,9 @@ is a gigantic leap forward for voice assistant usability in the real world.
 That said this is a very, very early technology preview. Caveat emptor!
 
 ## Why is this a big deal?
-1) Repeating yourself is the worst!
+1) Repeating yourself is the worst.
 2) Likely get away with using a lower resource-utilization Whisper model (even though WIS is really fast). Even on CPU!
-3) Speak the way you do. We hesitate, mumble, and say what we mean with variety. Other people understand us, voice assistants should too!
+3) Speak the way you do. We hesitate, mumble, and say what we mean with variety. Other people understand us, voice assistants should too.
 
 ## Getting Started
 
@@ -118,7 +118,7 @@ The default is 3 which is pretty much middle of the road.
 1 will almost always match "something" depending on how many Autolearn commands you have. Probably a bad idea - just try to feed it good commands at first.
 Any larger numbers are meant for longer text strings typically not seen in voice commands.
 
-One idea for the Autolearn/training phase is to teach WAC the commands you intend to use while speaking clearly and close to the device.
+One idea to seed Autolearn/training phase is to teach WAC the commands you intend to use while speaking clearly and close to the device.
 This will populate the typesense index with the commands you actually use - enabling the full power of WAC while cutting down on mistakes by not including things you don't intend to do.
 
 ### This thing is all over the place...
