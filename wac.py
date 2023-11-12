@@ -15,7 +15,7 @@ HA_TOKEN = config('HA_TOKEN', default=None, cast=str)
 LOG_LEVEL = config('LOG_LEVEL', default="debug", cast=str)
 TGI_URL = config(f'TGI_URL', default=None, cast=str)
 
-# This doesn't seem to be getting from docker to here - FIX
+# Typesense config vars
 TYPESENSE_API_KEY = config('TYPESENSE_API_KEY', default='testing', cast=str)
 TYPESENSE_HOST = config('TYPESENSE_HOST', default='127.0.0.1', cast=str)
 TYPESENSE_PORT = config('TYPESENSE_PORT', default=8108, cast=int)
@@ -98,16 +98,16 @@ def wac_search(command, exact_match=False, distance=2, num_results=5):
             wac_search_result, "/hits[0]/text_match_info/tokens_matched")
         wac_command = json_get(wac_search_result, "/hits[0]/document/command")
         source = json_get(wac_search_result, "/hits[0]/document/source")
+
+        if tokens_matched >= WAC_TOKEN_MATCH_THRESHOLD:
+            log.info(
+                f"WAC Search passed token threshold {WAC_TOKEN_MATCH_THRESHOLD} with {tokens_matched} from source {source}")
+            success = True
+        else:
+            log.info(
+                f"WAC Search failed token threshold {WAC_TOKEN_MATCH_THRESHOLD} with {tokens_matched} from source {source}")
     except:
         pass
-
-    if tokens_matched >= WAC_TOKEN_MATCH_THRESHOLD:
-        log.info(
-            f"WAC Search passed token threshold {WAC_TOKEN_MATCH_THRESHOLD} with {tokens_matched}")
-        success = True
-    else:
-        log.info(
-            f"WAC Search failed token threshold {WAC_TOKEN_MATCH_THRESHOLD} with {tokens_matched}")
 
     return success, wac_command
 
@@ -146,6 +146,7 @@ def api_post_proxy_handler(command, language):
     speech = "Sorry, I don't know that command."
 
     try:
+        log.info(f'Initial HA Intent Match with command {command}')
         ha_data = {"text": command, "language": language}
         ha_response = requests.post(HA_URL, headers=ha_headers, json=ha_data)
         ha_response = ha_response.json()
@@ -173,6 +174,8 @@ def api_post_proxy_handler(command, language):
 
         # Re-run HA with WAC Command
         try:
+            log.info(
+                f'Attempting WAC HA Intent Match with command {wac_command} from provided command {command}')
             ha_data = {"text": wac_command, "language": language}
             ha_response = requests.post(
                 HA_URL, headers=ha_headers, json=ha_data)
@@ -204,9 +207,16 @@ def read_root():
 
 @app.post("/proxy")
 async def api_post_proxy(request: Request):
-    request_json = await request.json()
-    language = request_json['language']
-    text = request_json['text']
-    response = api_post_proxy_handler(text, language)
-
-    return PlainTextResponse(content=response)
+    try:
+        time_start = datetime.now()
+        request_json = await request.json()
+        language = json_get_default(request_json, "/language", "en")
+        text = json_get(request_json, "/text")
+        response = api_post_proxy_handler(text, language)
+        time_end = datetime.now()
+        search_time = time_end - time_start
+        search_time_milliseconds = search_time.total_seconds() * 1000
+        log.info('WAC proxy took ' + str(search_time_milliseconds) + ' ms')
+        return PlainTextResponse(content=response)
+    except:
+        raise HTTPException(status_code=500, detail="WAC Failed")
