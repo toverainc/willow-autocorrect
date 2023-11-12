@@ -19,13 +19,20 @@ TGI_URL = config(f'TGI_URL', default=None, cast=str)
 TYPESENSE_API_KEY = config('TYPESENSE_API_KEY', default='testing', cast=str)
 TYPESENSE_HOST = config('TYPESENSE_HOST', default='127.0.0.1', cast=str)
 TYPESENSE_PORT = config('TYPESENSE_PORT', default=8108, cast=int)
+TYPESENSE_PROTOCOL = config('TYPESENSE_PROTOCOL', default='http', cast=str)
+TYPESENSE_TIMEOUT = config('TYPESENSE_TIMEOUT', default=1, cast=int)
 
 HA_URL = f'{HA_URL}/api/conversation/process'
 HA_TOKEN = f'Bearer {HA_TOKEN}'
 
 # The number of matching tokens to consider a successful WAC search
-WAC_TOKEN_MATCH_THRESHOLD = config(
-    'WAC_TOKEN_MATCH_THRESHOLD', default=3, cast=int)
+# More tokens = closer match
+TOKEN_MATCH_THRESHOLD = config(
+    'TOKEN_MATCH_THRESHOLD', default=3, cast=int)
+
+# The typesense collection to use
+COLLECTION = config(
+    'COLLECTION', default='commands', cast=str)
 
 logging.basicConfig(
     format='%(asctime)s %(levelname)-8s %(message)s',
@@ -50,21 +57,22 @@ ha_headers = {
     "Authorization": HA_TOKEN,
 }
 
+# The real WAC MVP
 typesense_client = typesense.Client({
     'nodes': [{
         'host': TYPESENSE_HOST,
         'port': TYPESENSE_PORT,
-        'protocol': 'http'
+        'protocol': TYPESENSE_PROTOCOL,
     }],
     'api_key': TYPESENSE_API_KEY,
-    'connection_timeout_seconds': 1
+    'connection_timeout_seconds': TYPESENSE_TIMEOUT
 })
 
 
 # WAC Search
 
 
-def wac_search(command, exact_match=False, distance=2, num_results=5, raw=False):
+def wac_search(command, exact_match=False, distance=2, num_results=5, raw=False, token_match_threshold=TOKEN_MATCH_THRESHOLD):
     log.info(f"WAC Search distance is {distance}")
     # Set fail by default
     success = False
@@ -93,7 +101,7 @@ def wac_search(command, exact_match=False, distance=2, num_results=5, raw=False)
     # Try WAC search
     try:
         log.info(f"Doing WAC Search for command: {command}")
-        wac_search_result = typesense_client.collections['commands'].documents.search(
+        wac_search_result = typesense_client.collections[COLLECTION].documents.search(
             wac_search_parameters)
         # For management API
         if raw:
@@ -104,15 +112,15 @@ def wac_search(command, exact_match=False, distance=2, num_results=5, raw=False)
         wac_command = json_get(wac_search_result, "/hits[0]/document/command")
         source = json_get(wac_search_result, "/hits[0]/document/source")
 
-        if tokens_matched >= WAC_TOKEN_MATCH_THRESHOLD:
+        if tokens_matched >= token_match_threshold:
             log.info(
-                f"WAC Search passed token threshold {WAC_TOKEN_MATCH_THRESHOLD} with {tokens_matched} from source {source}")
+                f"WAC Search passed token threshold {token_match_threshold} with {tokens_matched} from source {source}")
             success = True
         else:
             log.info(
-                f"WAC Search failed token threshold {WAC_TOKEN_MATCH_THRESHOLD} with {tokens_matched} from source {source}")
+                f"WAC Search failed token threshold {token_match_threshold} with {tokens_matched} from source {source}")
     except:
-        pass
+        log.info(f"WAC Search for command: {command} failed")
 
     return success, wac_command
 
@@ -135,7 +143,7 @@ def wac_add(command):
             'source': 'autolearn',
         }
         # Use create to update in real time
-        typesense_client.collections['commands'].documents.create(command_json)
+        typesense_client.collections[COLLECTION].documents.create(command_json)
         log.info(f'Added WAC command: {command}')
     except:
         log.error(f"WAC Add for command: {command} failed!")
@@ -145,7 +153,7 @@ def wac_add(command):
 # Request coming from proxy
 
 
-def api_post_proxy_handler(command, language):
+def api_post_proxy_handler(command, language, token_match_threshold=TOKEN_MATCH_THRESHOLD):
 
     # Init speech for when all else goes wrong
     speech = "Sorry, I don't know that command."
@@ -173,7 +181,7 @@ def api_post_proxy_handler(command, language):
 
     # Do WAC Search
     wac_success, wac_command = wac_search(
-        command, exact_match=False, distance=2, num_results=5)
+        command, exact_match=False, distance=2, num_results=5, token_match_threshold=token_match_threshold)
 
     if wac_success:
 
@@ -210,7 +218,7 @@ def read_root():
     return {"Hello": "World"}
 
 
-@app.get("/api/wac", summary="WAC Search", response_description="WAC Search")
+@app.get("/api/search", summary="WAC Search", response_description="WAC Search")
 async def api_get_wac(request: Request, command, distance: Optional[str] = 2, num_results: Optional[str] = 5, exact_match: Optional[bool] = False):
     time_start = datetime.now()
 
@@ -231,7 +239,9 @@ async def api_post_proxy(request: Request):
         request_json = await request.json()
         language = json_get_default(request_json, "/language", "en")
         text = json_get(request_json, "/text")
-        response = api_post_proxy_handler(text, language)
+        token_max_threshold = json_get_default(
+            request_json, "/token_match_threshold", TOKEN_MATCH_THRESHOLD)
+        response = api_post_proxy_handler(text, language, token_max_threshold)
         time_end = datetime.now()
         search_time = time_end - time_start
         search_time_milliseconds = search_time.total_seconds() * 1000
