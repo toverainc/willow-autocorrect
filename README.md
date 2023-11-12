@@ -19,10 +19,9 @@ is a gigantic leap forward for voice assistant usability in the real world.
 That said this is a very, very early technology preview. Caveat emptor!
 
 ## Why is this a big deal?
-1) Repeating yourself is the worst.
-2) Mumble from further away, in worse conditions.
-3) Likely get away with using a lower resource-utilization Whisper model (even though WIS is really fast). Even on CPU!
-4) Talk like a regular person. We hesitate, mumble, and say what we mean with variety. Other people understand us, voice assistants should too!
+1) Repeating yourself is the worst!
+2) Likely get away with using a lower resource-utilization Whisper model (even though WIS is really fast). Even on CPU!
+3) Speak the way you do. We hesitate, mumble, and say what we mean with variety. Other people understand us, voice assistants should too!
 
 ## Getting Started
 
