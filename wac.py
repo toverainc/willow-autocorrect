@@ -158,11 +158,11 @@ def wac_search(command, exact_match=False, distance=2, num_results=5, raw=False,
 def wac_add(command):
     log.info(f"Doing WAC Add for command '{command}'")
     try:
-        log.info(f"Search WAC before adding command '{command}'")
+        log.info(f"Searching WAC before adding command '{command}'")
         wac_exact_search_status, wac_command = wac_search(
             command, exact_match=True)
         if wac_exact_search_status is True:
-            log.info('Not adding duplicate command')
+            log.info('Refusing to add duplicate command')
             return
 
         command_json = {
