@@ -18,28 +18,35 @@ is a gigantic leap forward for voice assistant usability in the real world.
 
 That said this is a very, very early technology preview. Caveat emptor!
 
+## Why is this a big deal?
+1) Repeating yourself is the worst.
+2) Mumble from further away, in worse conditions.
+3) Likely get away with using a lower resource-utilization Whisper model (even though WIS is really fast). Even on CPU!
+4) Talk like a regular person. We hesitate, mumble, and say what we mean with variety. Other people understand us, voice assistants should too!
+
 ## Getting Started
 
 Clone this repo.
 
 Add your Home Assistant base URL and long-lived access token to `.env`:
 ```
-cat .env
 HA_TOKEN="shhh_your_token"
-HA_URL="http://homeassistant.local:8123"
+HA_URL="http://your_home_assistant_host:8123"
 ```
+
+You can get these from WAS or HA.
 
 Start things up:
 
 ```
-./utils.sh build-docker
+./utils.sh build-docker # Builds WAC
 ./utils.sh ts # Starts typesense as daemon
 ./utils.sh run # Starts WAC in foreground
 ```
 
 Then configure WAS via the web interface with the REST command endpoint (no auth):
 
-`http://your_machine_ip:9000/api/proxy`
+`http://your_wac_machine_ip:9000/api/proxy`
 
 Save and Apply changes.
 
@@ -216,7 +223,5 @@ We have internal testing with various LLMs. Typesense and Langchain [can be inte
 This is actually all pretty simple in the grand scheme of things.
 We can include WIS accelerated text embedding models and vector search in typesense to expand this functionality.
 
-## Why is this a big deal?
-1) Repeating yourself is the worst.
-2) Mumble from further away, in worse conditions.
-3) Likely get away with using a lower resource-utilization Whisper model (even though WIS is really fast). Even on CPU!
+### Multiple languages
+Not a problem, just need to get around to it.
