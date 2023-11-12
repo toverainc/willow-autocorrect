@@ -9,7 +9,6 @@ if [ -r .env ]; then
     . .env
 else
     echo "Using default configuration values"
-    touch .env
 fi
 
 #Import source the .env file
