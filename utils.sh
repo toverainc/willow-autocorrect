@@ -23,13 +23,19 @@ IMAGE=${IMAGE:-wac}
 TYPESENSE="typesense/typesense:0.25.1"
 TYPESENSE_API_KEY=${TYPESENSE_API_KEY:-testing}
 
-TS_DIR=$PWD/data/ts
+TYPESENSE_DIR=$WAC_DIR/data/ts
 
 WAC_PORT=${WAC_PORT:-9000}
 TYPESENSE_PORT=${TYPESENSE_PORT:-8108}
 
+# Reachable WAC IP for the "default" interface
+WAC_IP=$(ip route get 1.1.1.1 | grep -oP 'src \K\S+')
+
+# Docker temp workaround for dev
+TYPESENSE_HOST=${TYPESENSE_HOST:-"$WAC_IP"}
+
 # Just in case
-mkdir -p data
+mkdir -p "$TYPESENSE_DIR"
 
 freeze_requirements() {
     if [ ! -f /.dockerenv ]; then
@@ -52,22 +58,22 @@ freeze-requirements|fr)
 ;;
 
 gen_commands|gc)
-    docker run --rm -it -v $PWD:/app "$IMAGE":"$TAG" python3 generate_commands.py
+    docker run --rm -it -v $WAC_DIR:/app "$IMAGE":"$TAG" python3 generate_commands.py
 ;;
 
 run|start)
-    docker run --rm -it -p "$WAC_PORT":9000 -v $PWD:/app -e WAC_DB -e TYPESENSE_API_KEY "$IMAGE":"$TAG"
+    docker run --rm -it -p "$WAC_PORT":9000 -v $WAC_DIR:/app -e TYPESENSE_HOST \
+        -e TYPESENSE_API_KEY "$IMAGE":"$TAG"
 ;;
 
 shell)
-    docker run --rm -it -v $PWD:/app -e WAC_DB -e TYPESENSE_API_KEY "$IMAGE":"$TAG" /bin/bash
+    docker run --rm -it -v $WAC_DIR:/app -e TYPESENSE_HOST \
+        -e TYPESENSE_API_KEY "$IMAGE":"$TAG" /bin/bash
 ;;
 
 typesense|ts)
-    mkdir -p $TS_DIR
-
-    docker run --rm -it -p "$TYPESENSE_PORT":8108 \
-        -v"$TS_DIR":/data "$TYPESENSE" \
+    docker run --rm -d -p "$TYPESENSE_PORT":8108 \
+        -v"$TYPESENSE_DIR":/data "$TYPESENSE" \
         --data-dir /data \
         --api-key="$TYPESENSE_API_KEY"
 ;;
