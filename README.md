@@ -11,7 +11,7 @@ A simple speech recognition error like "turn of" instead of "turn off" doesn't w
 Voice assistants are supposed to be convenient, fast, and easy. If you have to repeat yourself why bother?
 
 ## Introducing Willow Auto Correct
-Willow Auto Correct smooths out these STT errors by leveraging [Typesense](https://typesense.org/) to learn and fix them.
+Willow Auto Correct smooths out these STT errors and more by leveraging [Typesense](https://typesense.org/) to learn and fix them.
 
 Typesense as used by Willow Auto Correct combined with Willow, Willow Application Server (WAS), and Willow Inference Server (WIS)
 is a leap forward for open-source, local, and private voice assistant usability in the real world.
