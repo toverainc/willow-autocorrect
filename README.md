@@ -19,8 +19,8 @@ is a leap forward for open-source, local, and private voice assistant usability 
 That said this is a very, very early technology preview. Caveat emptor!
 
 ## Why is this a big deal?
-1) Repeating yourself is the worst.
-2) You can likely get away with using a lower resource utilization Whisper model. WIS is already really fast - WIS + WAC is even faster while being much more accurate. Even on CPU!
+1) Repeating yourself and remembering how to talk to your voice "assistant" is the worst.
+2) You can likely get away with using a lower resource utilization Whisper model. WIS is already really fast and accurate - WIS + WAC is even faster while being much more accurate. Especially on CPU!
 3) Speak the way you do. We hesitate, mumble, and say what we mean with variety. Other people understand us. Voice assistants should too.
 
 ## Getting Started
@@ -64,8 +64,8 @@ This lets you know you're using it.
 Commands are pass-through to HA. When HA responds that the intent was matched the following happens:
 
 1) WAC searches Typesense to make sure we don't already know about that successful command. This uses exact string search.
-2) If the matching intent command is new add it to Typesense.
-3) The command does what it does.
+2) If the matching intent is new add it to Typesense.
+3) The command does what it does in Home Assistant.
 
 If the intent isn't matched and WAC doesn't have a prior successful intent match we don't do anything other than return "Sorry, I don't know that command".
 This is what you have today.
@@ -84,9 +84,9 @@ Fuzzy matching corrects things like variations in the transcript - minor variati
 - "Turn-on" matches "turn on"
 - "Turn of" matches "turn off"
 
-Our Typesense schema specifically includes the default of spaces plus '.' and '-'. We can alter this if need be.
+Our Typesense schema explicitly includes the default of spaces plus '.' and '-'. We can alter this if need be.
 
-Overall this functionality can be configured with the Levenshtein distance matching API param `distance`, which we support providing dynamically. What is Levenshtein distance? It's a 70 year old way to figure out how many times you need to move letters around to make two sentences match.
+Overall this functionality can be configured with the Levenshtein distance matching API param `distance`, which we support providing dynamically. What is Levenshtein distance? It's a 70 year old way to figure out how many times you need to move letters around to make two sentences match. If it ain't broke don't fix it!
 
 There are also a variety of additional knobs to tune: look around line 110 in `wac.py` if you are interested - and that's just a start! Typesense is really on another level.
 
@@ -185,13 +185,12 @@ Resource utilization is very minimal. It's a complete non-issue unless you have 
 
 In my testing the entire docker container uses ~60mb of RAM and a few percent CPU (will vary on system, but fine even for Raspberry Pi).
 
-Latency of typesense itself is typically in single digit milliseconds. It's all of the other stuff (WAC logic, HA, etc) that can result in ~100ms latency.
-See Performance below.
+Latency of typesense itself is typically in single digit milliseconds. It's all of the other stuff (WAC logic, HA, etc) can result in ~200ms latency. See Performance below.
 
 ## The Future
 
 ### Full integration with WAS
-Included in WAS, "just works".
+Included in WAS, "just works". Command addition, deletion, ranking, ordering, searching, thresholds, alias managment, etc all in the WAS Web UI.
 
 ### Performance
 I'm too lazy to deal with HA websockets so we open a new REST connection every time (at least twice).
@@ -211,20 +210,20 @@ This lets you basically say "do all of your fancy stuff with whatever I add to t
 
 ### Accuracy
 Our schema also has the concept of "accuracy".
-For learned commands users "thumbs up/thumbs down/re-arrange" matches and we can use this to influence the match weighting as well.
+For learned commands users thumbs up/thumbs down/re-arrange matches and we can use this to influence the match weighting as well.
 
 ### Getting Aggressive
 We currently only grab the first result from Typesense and retry HA once with it. We might want to tweak this.
 
 ### More Match Configuration
-See that typesense output above? We can use those large scores, etc to do additional ranking.
+See that Typesense output above? We can use those large scores, etc to do additional ranking. Again - Typesense is on another level. I feel like I'm selling it at this point.
 
 ### LLM Integration
 We have internal testing with various LLMs. Typesense and Langchain [can be integrated](https://python.langchain.com/docs/integrations/vectorstores/typesense?ref=typesense) so this will get really interesting.
 
 ### Vector search accelerated with WIS
-This is actually all pretty simple in the grand scheme of things.
-We can include WIS accelerated text embedding models and vector search in typesense to expand this functionality.
+Up to this point this all has been pretty simple in the grand scheme of things.
+We can leverage WIS accelerated text embedding models and vector search in Typesense and WAC.
 
 ### Multiple languages
 Not a problem, just need to get around to it.
