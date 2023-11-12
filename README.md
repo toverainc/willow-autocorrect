@@ -1,4 +1,4 @@
-# Willow Auto Correct (WAC) - EXTREME PREVIEW
+# Willow Auto Correct (WAC) - PREVIEW
 One step closer to "better than Alexa".
 
 ## Introduction
