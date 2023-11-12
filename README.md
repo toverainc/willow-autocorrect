@@ -11,7 +11,7 @@ This can lead to usability issues. A simple transcription error like "turn of" i
 Voice assistants are supposed to be convenient, fast, and easy. If you have to repeat yourself why bother?
 
 ## Introducing Willow Auto Correct
-Willow Auto Correct smoothes out these STT errors by leveraging [Typesense](https://typesense.org/) to learn and fix them.
+Willow Auto Correct smooths out these STT errors by leveraging [Typesense](https://typesense.org/) to learn and fix them.
 
 Typesense as used by Willow Auto Correct combined with Willow, Willow Application Server, and Willow Inference Server
 is a gigantic leap forward for voice assistant usability in the real world.
@@ -88,12 +88,12 @@ We intend to incorporate early feedback to expose configuration parameters and i
 
 Typesense uses "semantic search".
 
-Symantic search can recognize variations in language - it understands what you "mean". So for example:
+Semantic search can recognize variations in language - it understands what you "mean". So for example:
 
 - "Turn on the lights in eating room" matches "turn on dining room".
 - "turn on upstairs desk lamps" matches "turn on upstairs desk lights"
 
-Between distance matching and symantic search WAC can match some truly wild variations in commands/STT errors:
+Between distance matching and semantic search WAC can match some truly wild variations in commands/STT errors:
 
 - "turn-of lights and eating room." becomes 'turn on dining room lights.'
 - "turn-on lights in primary toilet" becomes "turn on lights in master bathroom"
@@ -113,7 +113,7 @@ The default is 3 which is pretty much middle of the road.
 Any larger numbers are meant for longer text strings typically not seen in voice commands.
 
 One idea for the Autolearn/training phase is to teach WAC the commands you intend to use while speaking clearly and close to the device.
-This will populate the typsense index with the commands you actually use - enabling the full power of WAC while cutting down on mistakes by not including things you don't intend to do.
+This will populate the typesense index with the commands you actually use - enabling the full power of WAC while cutting down on mistakes by not including things you don't intend to do.
 
 ### This thing is all over the place...
 
@@ -168,7 +168,7 @@ Search for "Turn-on eating room":
 ```
 
 The important thing to look for is the `text_match_info/tokens_matched` field, which is what we use for the `TOKEN_MATCH_THRESHOLD` above.
-This can give you an idea of how to tune this thing for whatver your actual experience is.
+This can give you an idea of how to tune this thing for whatever your actual experience is.
 
 ### Resource Utilization and Performance
 Resource utilization is very minimal. It's a complete non-issue unless you have tons of commands and even then probably not a big deal.
@@ -185,13 +185,13 @@ Included in WAS, "just works".
 
 ### Performance
 I'm too lazy to deal with HA websockets so we open a new REST connection every time (at least twice).
-This is "slow". When WAC is intergrated with WAS we will use websockets if available - just like WAS does today.
+This is "slow". When WAC is integrated with WAS we will use websockets if available - just like WAS does today.
 
 Typesense tuning. One example: for instant responsiveness of learned commands we don't use the aggressive memory cache. We might want to.
 
 ### Rank
 Our configured matching criteria includes the stuff above plus a user defined rank.
-This is a float value that can be attached to a command to heavily weight matching priority in addition to the fuzzy distance matching and symantic search.
+This is a float value that can be attached to a command to heavily weight matching priority in addition to the fuzzy distance matching and semantic search.
 
 This will be integrated in the WAS Web UI.
 
@@ -203,7 +203,7 @@ This lets you basically say "do all of your fancy stuff with whatever I add to t
 Our schema also has the concept of "accuracy".
 For learned commands users "thumbs up/thumbs down/re-arrange" matches and we can use this to influence the match weighting as well.
 
-### Getting Aggresive
+### Getting Aggressive
 We currently only grab the first result from Typesense and retry HA once with it. We might want to tweak this.
 
 ### More Match Configuration
