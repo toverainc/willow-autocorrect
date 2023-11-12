@@ -101,7 +101,6 @@ async def startup_event():
 
 
 def wac_search(command, exact_match=False, distance=2, num_results=5, raw=False, token_match_threshold=TOKEN_MATCH_THRESHOLD):
-    log.info(f"WAC Search distance is {distance}")
     # Set fail by default
     success = False
     wac_command = command
@@ -128,7 +127,8 @@ def wac_search(command, exact_match=False, distance=2, num_results=5, raw=False,
 
     # Try WAC search
     try:
-        log.info(f"Doing WAC Search for command: {command}")
+        log.info(
+            f"Doing WAC Search for command '{command}' with distance {distance}")
         wac_search_result = typesense_client.collections[COLLECTION].documents.search(
             wac_search_parameters)
         # For management API
@@ -142,13 +142,13 @@ def wac_search(command, exact_match=False, distance=2, num_results=5, raw=False,
 
         if tokens_matched >= token_match_threshold:
             log.info(
-                f"WAC Search passed token threshold {token_match_threshold} with {tokens_matched} from source {source}")
+                f"WAC Search passed token threshold {token_match_threshold} with result {tokens_matched} from source {source}")
             success = True
         else:
             log.info(
-                f"WAC Search failed token threshold {token_match_threshold} with {tokens_matched} from source {source}")
+                f"WAC Search didn't meet threshold {token_match_threshold} with result {tokens_matched} from source {source}")
     except:
-        log.info(f"WAC Search for command: {command} failed")
+        log.info(f"WAC Search for command '{command}' failed")
 
     return success, wac_command
 
@@ -188,7 +188,6 @@ def api_post_proxy_handler(command, language, token_match_threshold=TOKEN_MATCH_
     speech = "Sorry, I don't know that command."
 
     try:
-        log.info(f'Initial HA Intent Match with command {command}')
         ha_data = {"text": command, "language": language}
         ha_response = requests.post(HA_URL, headers=ha_headers, json=ha_data)
         ha_response = ha_response.json()
@@ -196,9 +195,9 @@ def api_post_proxy_handler(command, language, token_match_threshold=TOKEN_MATCH_
             ha_response, "/response/data/code", "intent_match")
 
         if code == "no_intent_match":
-            log.info('No Initial HA Intent Match')
+            log.info(f"No Initial HA Intent Match for command '{command}'")
         else:
-            log.info('Initial HA Intent Match')
+            log.info(f"Initial HA Intent Match for command '{command}'")
             wac_add(command)
             # Set speech to HA response and return
             log.info('Setting speech to HA response')
@@ -217,7 +216,7 @@ def api_post_proxy_handler(command, language, token_match_threshold=TOKEN_MATCH_
         # Re-run HA with WAC Command
         try:
             log.info(
-                f'Attempting WAC HA Intent Match with command {wac_command} from provided command {command}')
+                f"Attempting WAC HA Intent Match with command '{wac_command}' from provided command '{command}'")
             ha_data = {"text": wac_command, "language": language}
             ha_response = requests.post(
                 HA_URL, headers=ha_headers, json=ha_data)
@@ -226,19 +225,19 @@ def api_post_proxy_handler(command, language, token_match_threshold=TOKEN_MATCH_
                 ha_response, "/response/data/code", "intent_match")
 
             if code == "no_intent_match":
-                log.info(f'No WAC Command HA Intent Match: {wac_command}')
+                log.info(f"No WAC Command HA Intent Match: '{wac_command}'")
             else:
-                log.info(f'WAC Command HA Intent Match: {wac_command}')
+                log.info(f"WAC Command HA Intent Match: '{wac_command}'")
 
             # Set speech to HA response - whatever it is at this point
-            log.info('Setting speech to HA response')
             speech = json_get(
                 ha_response, "/response/speech/plain/speech", str)
+            log.info(f"Setting speech to HA response '{speech}'")
 
         except:
             pass
 
-    log.info(f'Final speech response: {speech}')
+    log.info(f"Final speech response '{speech}'")
     return speech
 
 
