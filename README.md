@@ -10,6 +10,8 @@ A simple speech recognition error like "turn of" instead of "turn off" doesn't w
 
 Voice assistants are supposed to be convenient, fast, and easy. If you have to repeat yourself why bother?
 
+We can use this "tight" matching to our advantage.
+
 ## Introducing Willow Auto Correct
 Willow Auto Correct smooths out these STT errors and more by leveraging [Typesense](https://typesense.org/) to learn and fix them.
 
@@ -20,7 +22,7 @@ That said this is a very, very early technology preview. Caveat emptor!
 
 ## Why is this a big deal?
 1) Repeating yourself and remembering how to talk to your voice "assistant" is the worst.
-2) You can likely get away with using a lower resource utilization Whisper model. WIS is already really fast and accurate - WIS + WAC is even faster while being much more accurate. Especially on CPU!
+2) You can likely get away with using lower resource utilization Whisper model. WIS is already really fast and accurate - WIS + WAC is even faster while being much more accurate. Especially on CPU!
 3) Speak the way you do. We hesitate, mumble, and say what we mean with variety. Other people understand us. Voice assistants should too.
 
 ## Getting Started
@@ -70,7 +72,7 @@ Commands are pass-through to HA. When HA responds that the intent was matched th
 If the intent isn't matched and WAC doesn't have a prior successful intent match we don't do anything other than return "Sorry, I don't know that command".
 This is what you have today.
 
-Autolearn is a lifelong learner - even as you add entities, change their names, etc.
+Autolearn is a lifelong learner - even as you add entities, change their names, speak differently, etc.
 
 ### Operational Flow
 
