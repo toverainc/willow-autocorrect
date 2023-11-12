@@ -156,9 +156,9 @@ def wac_search(command, exact_match=False, distance=2, num_results=5, raw=False,
 
 
 def wac_add(command):
-    log.info(f"Doing WAC Add for command: {command}")
+    log.info(f"Doing WAC Add for command '{command}'")
     try:
-        log.info(f"Search WAC before adding command: {command}")
+        log.info(f"Search WAC before adding command '{command}'")
         wac_exact_search_status, wac_command = wac_search(
             command, exact_match=True)
         if wac_exact_search_status is True:
@@ -172,9 +172,9 @@ def wac_add(command):
         }
         # Use create to update in real time
         typesense_client.collections[COLLECTION].documents.create(command_json)
-        log.info(f'Added WAC command: {command}')
+        log.info(f"Added WAC command '{command}'")
     except:
-        log.error(f"WAC Add for command: {command} failed!")
+        log.error(f"WAC Add for command '{command}' failed!")
 
     return
 
@@ -260,7 +260,7 @@ async def api_get_wac(request: Request, command, distance: Optional[str] = 2, nu
     return JSONResponse(content=results)
 
 
-@app.post("/proxy")
+@app.post("/api/proxy")
 async def api_post_proxy(request: Request):
     try:
         time_start = datetime.now()
