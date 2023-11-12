@@ -63,7 +63,7 @@ typesense_client = typesense.Client({
 # WAC Search
 
 
-def wac_search(command, exact_match=False, distance=2, num_results=5):
+def wac_search(command, exact_match=False, distance=2, num_results=5, raw=False):
     log.info(f"WAC Search distance is {distance}")
     # Set fail by default
     success = False
@@ -93,6 +93,9 @@ def wac_search(command, exact_match=False, distance=2, num_results=5):
         log.info(f"Doing WAC Search for command: {command}")
         wac_search_result = typesense_client.collections['commands'].documents.search(
             search_parameters)
+        # For management API
+        if raw:
+            return wac_search_result
         text_score = json_get(wac_search_result, "/hits[0]/text_match")
         tokens_matched = json_get(
             wac_search_result, "/hits[0]/text_match_info/tokens_matched")
@@ -203,6 +206,18 @@ def api_post_proxy_handler(command, language):
 @app.get("/")
 def read_root():
     return {"Hello": "World"}
+
+
+@app.get("/api/wac", summary="WAC Search", response_description="WAC Search")
+async def api_get_wac(request: Request, command: str, distance: Optional[str] = 2, num_results: Optional[str] = 5, exact_match: Optional[bool] = False):
+    time_start = datetime.now()
+    results = wac_search(command, exact_match=exact_match,
+                         distance=distance, num_results=num_results, raw=True)
+    time_end = datetime.now()
+    search_time = time_end - time_start
+    search_time_milliseconds = search_time.total_seconds() * 1000
+    log.info('WAC search took ' + str(search_time_milliseconds) + ' ms')
+    return JSONResponse(content=results)
 
 
 @app.post("/proxy")
