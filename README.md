@@ -13,7 +13,7 @@ Voice assistants are supposed to be convenient, fast, and easy. If you have to r
 ## Introducing Willow Auto Correct
 Willow Auto Correct smooths out these STT errors by leveraging [Typesense](https://typesense.org/) to learn and fix them.
 
-Typesense as used by Willow Auto Correct combined with Willow, Willow Application Server, and Willow Inference Server
+Typesense as used by Willow Auto Correct combined with Willow, Willow Application Server (WAS), and Willow Inference Server (WIS)
 is a gigantic leap forward for voice assistant usability in the real world.
 
 That said this is a very, very early technology preview. Caveat emptor!
