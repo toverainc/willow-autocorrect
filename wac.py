@@ -20,6 +20,8 @@ TYPESENSE_API_KEY = config('TYPESENSE_API_KEY', default='testing', cast=str)
 TYPESENSE_HOST = config('TYPESENSE_HOST', default='127.0.0.1', cast=str)
 TYPESENSE_PORT = config('TYPESENSE_PORT', default=8108, cast=int)
 TYPESENSE_PROTOCOL = config('TYPESENSE_PROTOCOL', default='http', cast=str)
+TYPESENSE_SLOW_TIMEOUT = config(
+    'TYPESENSE_SLOW_TIMEOUT', default=120, cast=int)
 TYPESENSE_TIMEOUT = config('TYPESENSE_TIMEOUT', default=1, cast=int)
 
 # HA
@@ -90,7 +92,7 @@ slow_typesense_client = typesense.Client({
         'protocol': TYPESENSE_PROTOCOL,
     }],
     'api_key': TYPESENSE_API_KEY,
-    'connection_timeout_seconds': 60
+    'connection_timeout_seconds': TYPESENSE_SLOW_TIMEOUT
 })
 
 # The schema for WAC commands - you really do not want to mess with this
@@ -127,6 +129,18 @@ wac_commands_schema = {
                 }
             }
         },
+        {
+            "name": "gte-small",
+            "type": "float[]",
+            "embed": {
+                "from": [
+                    "command"
+                ],
+                "model_config": {
+                    "model_name": "ts/gte-small"
+                }
+            }
+        },
     ],
     'default_sorting_field': 'rank',
     "token_separators": [".", "-"]
@@ -137,7 +151,8 @@ def init_typesense():
     try:
         typesense_client.collections[COLLECTION].retrieve()
     except:
-        log.info(f"WAC collection '{COLLECTION}' not found - initializing")
+        log.info(
+            f"WAC collection '{COLLECTION}' not found - initializing with timeout {TYPESENSE_SLOW_TIMEOUT} - please wait.")
         # Hack around slow initial schema generation because of model download
         slow_typesense_client.collections.create(wac_commands_schema)
         log.info(f"WAC collection '{COLLECTION}' initialized")
@@ -278,7 +293,8 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
             log.info('Setting speech to HA response')
             speech = json_get(
                 ha_response, "/response/speech/plain/speech", str)
-            return speech
+            wac_speech = f"Learned command and {speech}"
+            return wac_speech
     except:
         pass
 
@@ -308,7 +324,9 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
             speech = json_get(
                 ha_response, "/response/speech/plain/speech", str)
             log.info(f"Setting speech to HA response '{speech}'")
-
+            wac_speech = f"Corrected and {speech}"
+            log.info(f"Setting final speech to HA response '{wac_speech}'")
+            speech = wac_speech
         except:
             pass
 
