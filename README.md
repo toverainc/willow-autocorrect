@@ -10,7 +10,11 @@ A simple speech recognition error like "turn of" instead of "turn off" doesn't w
 
 Voice assistants are supposed to be convenient, fast, and easy. If you have to repeat yourself why bother?
 
-We can use this "tight" matching to our advantage.
+We can use this "tight" matching to our advantage by learning your commands when the command platform "tight" match is successful.
+
+That's when Willow Auto Correct goes to work!
+
+Seem to good to be true? Read on.
 
 ## Introducing Willow Auto Correct
 Willow Auto Correct smooths out these STT errors and more by leveraging [Typesense](https://typesense.org/) to learn and fix them.
@@ -68,6 +72,7 @@ Commands are pass-through to HA. When HA responds that the intent was matched th
 1) WAC searches Typesense to make sure we don't already know about that successful command. This uses exact string search.
 2) If the matching intent is new add it to Typesense.
 3) The command does what it does in Home Assistant.
+4) We give you the Home Assistant output and let you know we learned a new command.
 
 If the intent isn't matched and WAC doesn't have a prior successful intent match we don't do anything other than return "Sorry, I don't know that command".
 This is what you have today.
