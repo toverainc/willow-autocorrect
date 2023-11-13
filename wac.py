@@ -28,6 +28,10 @@ TYPESENSE_TIMEOUT = config('TYPESENSE_TIMEOUT', default=1, cast=int)
 HA_URL = f'{HA_URL}/api/conversation/process'
 HA_TOKEN = f'Bearer {HA_TOKEN}'
 
+# Default number of search results and attempts
+CORRECT_ATTEMPTS = config(
+    'CORRECT_ATTEMPTS', default=1, cast=int)
+
 # Search distance for text string distance
 SEARCH_DISTANCE = config(
     'SEARCH_DISTANCE', default=2, cast=int)
@@ -174,12 +178,15 @@ async def startup_event():
 # WAC Search
 
 
-def wac_search(command, exact_match=False, distance=SEARCH_DISTANCE, num_results=5, raw=False, token_match_threshold=TOKEN_MATCH_THRESHOLD, semantic="off", vector_distance_threshold=VECTOR_DISTANCE_THRESHOLD, fusion_score_threshold=FUSION_SCORE_THRESHOLD):
+def wac_search(command, exact_match=False, distance=SEARCH_DISTANCE, num_results=CORRECT_ATTEMPTS, raw=False, token_match_threshold=TOKEN_MATCH_THRESHOLD, semantic="off", vector_distance_threshold=VECTOR_DISTANCE_THRESHOLD, fusion_score_threshold=FUSION_SCORE_THRESHOLD):
     # Set fail by default
     success = False
     wac_command = command
+
+    # Absurd values to always lose if something goes wrong
     tokens_matched = 0
-    vector_distance = 1.0
+    vector_distance = 10.0
+    fusion_score = 0.0
 
     # Do not change these unless you know what you are doing
     wac_search_parameters = {
@@ -330,7 +337,7 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
         pass
 
     # Do WAC Search
-    wac_success, wac_command = wac_search(command, exact_match=exact_match, distance=distance, num_results=5, raw=False,
+    wac_success, wac_command = wac_search(command, exact_match=exact_match, distance=distance, num_results=CORRECT_ATTEMPTS, raw=False,
                                           token_match_threshold=token_match_threshold, semantic=semantic, vector_distance_threshold=vector_distance_threshold, fusion_score_threshold=fusion_score_threshold)
 
     if wac_success:
@@ -370,7 +377,7 @@ def read_root():
 
 
 @app.get("/api/search", summary="WAC Search", response_description="WAC Search")
-async def api_get_wac(request: Request, command, distance: Optional[str] = SEARCH_DISTANCE, num_results: Optional[str] = 5, exact_match: Optional[bool] = False, semantic: Optional[str] = "off"):
+async def api_get_wac(request: Request, command, distance: Optional[str] = SEARCH_DISTANCE, num_results: Optional[str] = CORRECT_ATTEMPTS, exact_match: Optional[bool] = False, semantic: Optional[str] = "off"):
     time_start = datetime.now()
 
     # Little fix for compatibility
