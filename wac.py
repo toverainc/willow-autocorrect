@@ -276,7 +276,7 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
     log.info(
         f"Processing proxy request for command '{command}' with distance {distance} token match threshold {token_match_threshold} exact match {exact_match} semantic {semantic} with vector distance threshold {vector_distance_threshold}")
     # Init speech for when all else goes wrong
-    speech = "Sorry, I don't know that command."
+    speech = "Sorry, I can't find that command."
     # Default to command isn't learned
     learned = False
 
