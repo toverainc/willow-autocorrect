@@ -213,11 +213,17 @@ def wac_search(command, exact_match=False, distance=SEARCH_DISTANCE, num_results
         wac_command = json_get(wac_search_result, "/hits[0]/document/command")
         source = json_get(wac_search_result, "/hits[0]/document/source")
         # Do this safely in case they don't have vector in db
-        vector_distance = json_get_default(
-            wac_search_result, "/hits[0]/vector_distance", vector_distance)
 
         # Almost certainly going to score vs token match
         if semantic is True:
+            vector_distance = json_get_default(
+                wac_search_result, "/hits[0]/vector_distance", vector_distance)
+
+            rank_fusion_score = json_get_default(
+                wac_search_result, "/hits[0]/hybrid_search_info/rank_fusion_score", 10)
+
+            log.info(
+                f"Hybrid semantic search rank fusion score is {rank_fusion_score}")
             if vector_distance <= vector_distance_threshold:
                 log.info(
                     f"WAC Semantic Search passed vector distance threshold {vector_distance_threshold} with result {vector_distance} from source {source}")
