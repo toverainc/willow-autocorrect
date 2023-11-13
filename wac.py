@@ -63,7 +63,7 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S')
 
 app = FastAPI(title="WAC Proxy",
-              description="Make voice better",
+              description="Willow Auto Correct REST Proxy",
               version="0.1",
               openapi_url="/openapi.json",
               docs_url="/docs",
@@ -205,7 +205,7 @@ def wac_search(command, exact_match=False, distance=SEARCH_DISTANCE, num_results
         log.info(
             f"Doing hybrid semantic WAC Search with model {TYPESENSE_SEMANTIC_MODEL}")
         wac_search_parameters.update(
-            {'query_by': f'{TYPESENSE_SEMANTIC_MODEL},command'})
+            {'query_by': f'command,{TYPESENSE_SEMANTIC_MODEL}'})
     elif semantic == "on":
         log.info(
             f"Doing semantic WAC Search with model {TYPESENSE_SEMANTIC_MODEL}")
@@ -261,7 +261,7 @@ def wac_search(command, exact_match=False, distance=SEARCH_DISTANCE, num_results
                     f"WAC Search didn't meet threshold {token_match_threshold} with result {tokens_matched} from source {source}")
 
     except:
-        log.info(f"WAC Search for command '{command}' failed")
+        log.info(f"WAC Search for command '{command}' not found")
 
     return success, wac_command
 
