@@ -244,13 +244,14 @@ def wac_search(command, exact_match=False, distance=SEARCH_DISTANCE, num_results
 
 def wac_add(command):
     log.info(f"Doing WAC Add for command '{command}'")
+    learned = False
     try:
         log.info(f"Searching WAC before adding command '{command}'")
         wac_exact_search_status, wac_command = wac_search(
             command, exact_match=True)
         if wac_exact_search_status is True:
             log.info('Refusing to add duplicate command')
-            return
+            return learned
 
         command_json = {
             'command': command,
@@ -260,10 +261,11 @@ def wac_add(command):
         # Use create to update in real time
         typesense_client.collections[COLLECTION].documents.create(command_json)
         log.info(f"Added WAC command '{command}'")
+        learned = True
     except:
         log.error(f"WAC Add for command '{command}' failed!")
 
-    return
+    return learned
 
 
 # Request coming from proxy
@@ -275,6 +277,8 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
         f"Processing proxy request for command '{command}' with distance {distance} token match threshold {token_match_threshold} exact match {exact_match} semantic {semantic} with vector distance threshold {vector_distance_threshold}")
     # Init speech for when all else goes wrong
     speech = "Sorry, I don't know that command."
+    # Default to command isn't learned
+    learned = False
 
     try:
         ha_data = {"text": command, "language": language}
@@ -288,13 +292,14 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
             log.info(f"No Initial HA Intent Match for command '{command}'")
         else:
             log.info(f"Initial HA Intent Match for command '{command}'")
-            wac_add(command)
+            learned = wac_add(command)
             # Set speech to HA response and return
             log.info('Setting speech to HA response')
             speech = json_get(
                 ha_response, "/response/speech/plain/speech", str)
-            wac_speech = f"Learned command and {speech}"
-            return wac_speech
+            if learned is True:
+                speech = f"{speech} and learned command"
+            return speech
     except:
         pass
 
@@ -323,10 +328,9 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
             # Set speech to HA response - whatever it is at this point
             speech = json_get(
                 ha_response, "/response/speech/plain/speech", str)
-            log.info(f"Setting speech to HA response '{speech}'")
-            wac_speech = f"Corrected and {speech}"
-            log.info(f"Setting final speech to HA response '{wac_speech}'")
-            speech = wac_speech
+            log.info(f"HA speech: '{speech}'")
+            speech = f"{speech} with corrected command {wac_command}"
+            log.info(f"Setting final speech to '{speech}'")
         except:
             pass
 
