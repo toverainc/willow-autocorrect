@@ -215,6 +215,7 @@ def wac_search(command, exact_match=False, distance=SEARCH_DISTANCE, num_results
         # Do this safely in case they don't have vector in db
 
         # Almost certainly going to score vs token match
+        log.info(f"Trying scoring evaluation with top match '{wac_command}'")
         if semantic is True:
             vector_distance = json_get_default(
                 wac_search_result, "/hits[0]/vector_distance", vector_distance)
