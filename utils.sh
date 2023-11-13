@@ -27,12 +27,6 @@ TYPESENSE_DIR=$WAC_DIR/data/ts
 WAC_PORT=${WAC_PORT:-9000}
 TYPESENSE_PORT=${TYPESENSE_PORT:-8108}
 
-# Reachable WAC IP for the "default" interface
-WAC_IP=$(ip route get 1.1.1.1 | grep -oP 'src \K\S+')
-
-# Docker temp workaround for dev
-TYPESENSE_HOST=${TYPESENSE_HOST:-"$WAC_IP"}
-
 # Just in case
 mkdir -p "$TYPESENSE_DIR"
 
@@ -61,6 +55,12 @@ gen_commands|gc)
 ;;
 
 run|start)
+    # Reachable WAC IP for the "default" interface
+    WAC_IP=$(ip route get 1.1.1.1 | grep -oP 'src \K\S+')
+
+    # Docker temp workaround for dev
+    TYPESENSE_HOST=${TYPESENSE_HOST:-"$WAC_IP"}
+
     docker run --rm -it -p "$WAC_PORT":9000 -v $WAC_DIR:/app -e TYPESENSE_HOST \
         -e TYPESENSE_API_KEY "$IMAGE":"$TAG"
 ;;
