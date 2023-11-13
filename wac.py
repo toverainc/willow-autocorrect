@@ -26,10 +26,20 @@ TYPESENSE_TIMEOUT = config('TYPESENSE_TIMEOUT', default=1, cast=int)
 HA_URL = f'{HA_URL}/api/conversation/process'
 HA_TOKEN = f'Bearer {HA_TOKEN}'
 
+# Search distance for text string distance
+SEARCH_DISTANCE = config(
+    'SEARCH_DISTANCE', default=2, cast=int)
+
 # The number of matching tokens to consider a successful WAC search
 # More tokens = closer match
 TOKEN_MATCH_THRESHOLD = config(
     'TOKEN_MATCH_THRESHOLD', default=3, cast=int)
+
+# The number of matching tokens to consider a successful WAC search
+# larger float = further away (less close in meaning)
+VECTOR_DISTANCE_THRESHOLD = config(
+    'VECTOR_DISTANCE_THRESHOLD', default=0.5, cast=float)
+
 
 # The typesense collection to use
 COLLECTION = config(
@@ -79,7 +89,18 @@ wac_commands_schema = {
         {'name': 'alias', 'type': 'string', 'optional': True, "sort": True},
         {'name': 'accuracy', 'type': 'float', 'optional': True},
         {'name': 'source', 'type': 'string', 'optional': True, "sort": True},
-
+        {
+            "name": "all-MiniLM-L12-v2",
+            "type": "float[]",
+            "embed": {
+                "from": [
+                    "command"
+                ],
+                "model_config": {
+                    "model_name": "ts/all-MiniLM-L12-v2"
+                }
+            }
+        },
     ],
     'default_sorting_field': 'rank',
     "token_separators": [".", "-"]
@@ -91,7 +112,11 @@ def init_typesense():
         typesense_client.collections[COLLECTION].retrieve()
     except:
         log.info(f'WAC collection {COLLECTION} not found - initializing')
-        typesense_client.collections.create(wac_commands_schema)
+        # Hack around works but says it doesn't with vector - WIP
+        try:
+            typesense_client.collections.create(wac_commands_schema)
+        except:
+            pass
 
 
 @app.on_event("startup")
@@ -101,11 +126,12 @@ async def startup_event():
 # WAC Search
 
 
-def wac_search(command, exact_match=False, distance=2, num_results=5, raw=False, token_match_threshold=TOKEN_MATCH_THRESHOLD):
+def wac_search(command, exact_match=False, distance=SEARCH_DISTANCE, num_results=5, raw=False, token_match_threshold=TOKEN_MATCH_THRESHOLD, semantic=False, vector_distance_threshold=VECTOR_DISTANCE_THRESHOLD):
     # Set fail by default
     success = False
     wac_command = command
     tokens_matched = 0
+    vector_distance = 1.0
 
     # Do not change these unless you know what you are doing
     wac_search_parameters = {
@@ -122,9 +148,13 @@ def wac_search(command, exact_match=False, distance=2, num_results=5, raw=False,
         'min_len_2typo': 1,
         'per_page': num_results
     }
-    if exact_match:
+    if exact_match is True:
         log.info(f"Doing exact match WAC Search")
         wac_search_parameters.update({'filter_by': f'command:={command}'})
+    if semantic is True:
+        log.info(f"Doing hybrid semantic WAC Search")
+        wac_search_parameters.update(
+            {'query_by': f'command,all-MiniLM-L12-v2'})
 
     # Try WAC search
     try:
@@ -140,15 +170,28 @@ def wac_search(command, exact_match=False, distance=2, num_results=5, raw=False,
             wac_search_result, "/hits[0]/text_match_info/tokens_matched")
         wac_command = json_get(wac_search_result, "/hits[0]/document/command")
         source = json_get(wac_search_result, "/hits[0]/document/source")
+        # Do this safely in case they don't have vector in db
+        vector_distance = json_get_default(
+            wac_search_result, "/hits[0]/vector_distance", vector_distance)
 
         # Almost certainly going to score vs token match
-        if tokens_matched >= token_match_threshold:
-            log.info(
-                f"WAC Search passed token threshold {token_match_threshold} with result {tokens_matched} from source {source}")
-            success = True
+        if semantic is True:
+            if vector_distance <= vector_distance_threshold:
+                log.info(
+                    f"WAC Semantic Search passed vector distance threshold {vector_distance_threshold} with result {vector_distance} from source {source}")
+                success = True
+            else:
+                log.info(
+                    f"WAC Semantic Search didn't meet vector distance threshold {vector_distance_threshold} with result {vector_distance} from source {source}")
         else:
-            log.info(
-                f"WAC Search didn't meet threshold {token_match_threshold} with result {tokens_matched} from source {source}")
+            if tokens_matched >= token_match_threshold:
+                log.info(
+                    f"WAC Search passed token threshold {token_match_threshold} with result {tokens_matched} from source {source}")
+                success = True
+            else:
+                log.info(
+                    f"WAC Search didn't meet threshold {token_match_threshold} with result {tokens_matched} from source {source}")
+
     except:
         log.info(f"WAC Search for command '{command}' failed")
 
@@ -184,8 +227,10 @@ def wac_add(command):
 # Request coming from proxy
 
 
-def api_post_proxy_handler(command, language, token_match_threshold=TOKEN_MATCH_THRESHOLD):
+def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_match_threshold=TOKEN_MATCH_THRESHOLD, exact_match=False, semantic=False, vector_distance_threshold=VECTOR_DISTANCE_THRESHOLD):
 
+    log.info(
+        f"Processing proxy request for command '{command}' with distance {distance} token match threshold {token_match_threshold} exact match {exact_match} semantic {semantic} with vector distance threshold {vector_distance_threshold}")
     # Init speech for when all else goes wrong
     speech = "Sorry, I don't know that command."
 
@@ -210,8 +255,8 @@ def api_post_proxy_handler(command, language, token_match_threshold=TOKEN_MATCH_
         pass
 
     # Do WAC Search
-    wac_success, wac_command = wac_search(
-        command, exact_match=False, distance=2, num_results=5, token_match_threshold=token_match_threshold)
+    wac_success, wac_command = wac_search(command, exact_match=exact_match, distance=distance, num_results=5, raw=False,
+                                          token_match_threshold=token_match_threshold, semantic=semantic, vector_distance_threshold=vector_distance_threshold)
 
     if wac_success:
 
@@ -249,11 +294,11 @@ def read_root():
 
 
 @app.get("/api/search", summary="WAC Search", response_description="WAC Search")
-async def api_get_wac(request: Request, command, distance: Optional[str] = 2, num_results: Optional[str] = 5, exact_match: Optional[bool] = False):
+async def api_get_wac(request: Request, command, distance: Optional[str] = SEARCH_DISTANCE, num_results: Optional[str] = 5, exact_match: Optional[bool] = False, semantic: Optional[bool] = False):
     time_start = datetime.now()
 
     results = wac_search(command, exact_match=exact_match,
-                         distance=distance, num_results=num_results, raw=True)
+                         distance=distance, num_results=num_results, raw=True, semantic=semantic)
 
     time_end = datetime.now()
     search_time = time_end - time_start
@@ -263,19 +308,17 @@ async def api_get_wac(request: Request, command, distance: Optional[str] = 2, nu
 
 
 @app.post("/api/proxy")
-async def api_post_proxy(request: Request):
-    try:
-        time_start = datetime.now()
-        request_json = await request.json()
-        language = json_get_default(request_json, "/language", "en")
-        text = json_get(request_json, "/text")
-        token_max_threshold = json_get_default(
-            request_json, "/token_match_threshold", TOKEN_MATCH_THRESHOLD)
-        response = api_post_proxy_handler(text, language, token_max_threshold)
-        time_end = datetime.now()
-        search_time = time_end - time_start
-        search_time_milliseconds = search_time.total_seconds() * 1000
-        log.info('WAC proxy took ' + str(search_time_milliseconds) + ' ms')
-        return PlainTextResponse(content=response)
-    except:
-        raise HTTPException(status_code=500, detail="WAC Failed")
+async def api_post_proxy(request: Request, distance: Optional[int] = SEARCH_DISTANCE, token_match_threshold: Optional[int] = TOKEN_MATCH_THRESHOLD, exact_match: Optional[bool] = False, semantic: Optional[bool] = False, vector_distance_threshold: Optional[float] = VECTOR_DISTANCE_THRESHOLD):
+    time_start = datetime.now()
+    request_json = await request.json()
+    language = json_get_default(request_json, "/language", "en")
+    text = json_get(request_json, "/text")
+    token_max_threshold = json_get_default(
+        request_json, "/token_match_threshold", TOKEN_MATCH_THRESHOLD)
+    response = api_post_proxy_handler(
+        text, language, distance=distance, token_match_threshold=token_match_threshold, exact_match=exact_match, semantic=semantic, vector_distance_threshold=vector_distance_threshold)
+    time_end = datetime.now()
+    search_time = time_end - time_start
+    search_time_milliseconds = search_time.total_seconds() * 1000
+    log.info('WAC proxy took ' + str(search_time_milliseconds) + ' ms')
+    return PlainTextResponse(content=response)

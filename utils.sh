@@ -70,8 +70,13 @@ shell)
         -e TYPESENSE_API_KEY "$IMAGE":"$TAG" /bin/bash
 ;;
 
+wipe)
+    echo "Removing $TYPESENSE_DIR - needs sudo"
+    sudo rm -rf "$TYPESENSE_DIR"
+;;
+
 typesense|ts)
-    docker run --rm -d -p "$TYPESENSE_PORT":8108 \
+    docker run --rm -it -p "$TYPESENSE_PORT":8108 \
         -v"$TYPESENSE_DIR":/data "$TYPESENSE" \
         --data-dir /data \
         --api-key="$TYPESENSE_API_KEY"
