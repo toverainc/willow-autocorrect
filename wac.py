@@ -40,6 +40,9 @@ TOKEN_MATCH_THRESHOLD = config(
 VECTOR_DISTANCE_THRESHOLD = config(
     'VECTOR_DISTANCE_THRESHOLD', default=0.5, cast=float)
 
+# Typesense embedding model to use
+TYPESENSE_SEMANTIC_MODEL = config(
+    'TYPESENSE_SEMANTIC_MODEL', default='all-MiniLM-L12-v2', cast=str)
 
 # The typesense collection to use
 COLLECTION = config(
@@ -79,6 +82,17 @@ typesense_client = typesense.Client({
     'connection_timeout_seconds': TYPESENSE_TIMEOUT
 })
 
+# For operations that take a while like initial vector schema and model download
+slow_typesense_client = typesense.Client({
+    'nodes': [{
+        'host': TYPESENSE_HOST,
+        'port': TYPESENSE_PORT,
+        'protocol': TYPESENSE_PROTOCOL,
+    }],
+    'api_key': TYPESENSE_API_KEY,
+    'connection_timeout_seconds': 60
+})
+
 # The schema for WAC commands - you really do not want to mess with this
 wac_commands_schema = {
     'name': COLLECTION,
@@ -101,6 +115,18 @@ wac_commands_schema = {
                 }
             }
         },
+        {
+            "name": "multilingual-e5-small",
+            "type": "float[]",
+            "embed": {
+                "from": [
+                    "command"
+                ],
+                "model_config": {
+                    "model_name": "ts/multilingual-e5-small"
+                }
+            }
+        },
     ],
     'default_sorting_field': 'rank',
     "token_separators": [".", "-"]
@@ -111,12 +137,12 @@ def init_typesense():
     try:
         typesense_client.collections[COLLECTION].retrieve()
     except:
-        log.info(f'WAC collection {COLLECTION} not found - initializing')
-        # Hack around works but says it doesn't with vector - WIP
-        try:
-            typesense_client.collections.create(wac_commands_schema)
-        except:
-            pass
+        log.info(f"WAC collection '{COLLECTION}' not found - initializing")
+        # Hack around slow initial schema generation because of model download
+        slow_typesense_client.collections.create(wac_commands_schema)
+        log.info(f"WAC collection '{COLLECTION}' initialized")
+
+    log.info(f"Connected to WAC Typesense host '{TYPESENSE_HOST}'")
 
 
 @app.on_event("startup")
@@ -152,9 +178,10 @@ def wac_search(command, exact_match=False, distance=SEARCH_DISTANCE, num_results
         log.info(f"Doing exact match WAC Search")
         wac_search_parameters.update({'filter_by': f'command:={command}'})
     if semantic is True:
-        log.info(f"Doing hybrid semantic WAC Search")
+        log.info(
+            f"Doing hybrid semantic WAC Search with model {TYPESENSE_SEMANTIC_MODEL}")
         wac_search_parameters.update(
-            {'query_by': f'command,all-MiniLM-L12-v2'})
+            {'query_by': f'command,{TYPESENSE_SEMANTIC_MODEL}'})
 
     # Try WAC search
     try:
@@ -236,6 +263,7 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
 
     try:
         ha_data = {"text": command, "language": language}
+        log.info(f"Trying initial HA intent match '{command}'")
         ha_response = requests.post(HA_URL, headers=ha_headers, json=ha_data)
         ha_response = ha_response.json()
         code = json_get_default(
@@ -315,8 +343,8 @@ async def api_post_proxy(request: Request, distance: Optional[int] = SEARCH_DIST
     text = json_get(request_json, "/text")
     token_max_threshold = json_get_default(
         request_json, "/token_match_threshold", TOKEN_MATCH_THRESHOLD)
-    response = api_post_proxy_handler(
-        text, language, distance=distance, token_match_threshold=token_match_threshold, exact_match=exact_match, semantic=semantic, vector_distance_threshold=vector_distance_threshold)
+    response = api_post_proxy_handler(text, language, distance=distance, token_match_threshold=token_match_threshold,
+                                      exact_match=exact_match, semantic=semantic, vector_distance_threshold=vector_distance_threshold)
     time_end = datetime.now()
     search_time = time_end - time_start
     search_time_milliseconds = search_time.total_seconds() * 1000
