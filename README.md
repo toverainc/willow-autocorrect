@@ -63,7 +63,7 @@ While you're being brave why don't you try Willow One Wake (WOW) and play around
 
 ### Learning Flow (Autolearn)
 
-Initially all WAC does is replace "Sorry, I didn't understand that" with "Sorry, I don't know that command".
+Initially all WAC does is replace "Sorry, I didn't understand that" with "Sorry, I can't find that command".
 
 This lets you know you're using it.
 
@@ -74,7 +74,7 @@ Commands are pass-through to HA. When HA responds that the intent was matched th
 3) The command does what it does in Home Assistant.
 4) We give you the Home Assistant output and let you know we learned a new command.
 
-If the intent isn't matched and WAC doesn't have a prior successful intent match we don't do anything other than return "Sorry, I don't know that command".
+If the intent isn't matched and WAC doesn't have a prior successful intent match we don't do anything other than return "Sorry, I can't find that command".
 This is what you have today.
 
 Autolearn is a lifelong learner - even as you add entities, change their names, speak differently, etc.
@@ -130,7 +130,7 @@ The default is 3 which is pretty much middle of the road.
 Any larger numbers are meant for longer text strings typically not seen in voice commands.
 
 One idea to seed Autolearn/training phase is to teach WAC the commands you intend to use while speaking clearly and close to the device.
-This will populate the typesense index with the commands you actually use - enabling the full power of WAC while cutting down on mistakes by not including things you don't intend to do.
+This will populate the Typesense index with the commands you actually use - enabling the full power of WAC while cutting down on mistakes by not including things you don't intend to do.
 
 ### This thing is all over the place...
 
@@ -191,6 +191,8 @@ This can give you an idea of how to tune this thing for whatever your actual exp
 Resource utilization is very minimal. It's a complete non-issue unless you have tons of commands and even then probably not a big deal.
 
 In my testing the entire docker container uses ~60mb of RAM and a few percent CPU (will vary on system, but fine even for Raspberry Pi).
+
+Semantic search uses more memory with the Auto Correct container using ~300mb of RAM. This is due to the language model used by semantic search.
 
 Latency of typesense itself is typically in single digit milliseconds. It's all of the other stuff (WAC logic, HA, etc) can result in ~200ms latency. See Performance below.
 
