@@ -39,6 +39,8 @@ TOKEN_MATCH_THRESHOLD = config(
 
 # The number of matching tokens to consider a successful WAC search
 # larger float = further away (less close in meaning)
+# NOTE: Different models have different score mechanisms
+# This will likely need to get adjusted if you use models other than all-MiniLM-L12-v2
 VECTOR_DISTANCE_THRESHOLD = config(
     'VECTOR_DISTANCE_THRESHOLD', default=0.5, cast=float)
 
@@ -157,7 +159,7 @@ def init_typesense():
         typesense_client.collections[COLLECTION].retrieve()
     except:
         log.info(
-            f"WAC collection '{COLLECTION}' not found - initializing with timeout {TYPESENSE_SLOW_TIMEOUT} - please wait.")
+            f"WAC collection '{COLLECTION}' not found. Initializing with timeout {TYPESENSE_SLOW_TIMEOUT} - please wait.")
         # Hack around slow initial schema generation because of model download
         slow_typesense_client.collections.create(wac_commands_schema)
         log.info(f"WAC collection '{COLLECTION}' initialized")
