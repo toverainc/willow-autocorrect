@@ -1,7 +1,9 @@
 #!/bin/bash
 set -e
 
-. .env
+if [ -r .env ]; then
+    . .env
+fi
 
 # Log level - acceptable values are debug, info, warning, error, critical. Suggest info or debug.
 LOG_LEVEL=${LOG_LEVEL:-info}
