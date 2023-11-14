@@ -50,8 +50,8 @@ VECTOR_DISTANCE_THRESHOLD = config(
 
 # Hybrid/fusion search threshold.
 # larger float = closer (reverse of vector distance)
-FUSION_SCORE_THRESHOLD = config(
-    'FUSION_SCORE_THRESHOLD', default=0.5, cast=float)
+HYBRID_SCORE_THRESHOLD = config(
+    'HYBRID_SCORE_THRESHOLD', default=0.5, cast=float)
 
 # Typesense embedding model to use
 TYPESENSE_SEMANTIC_MODEL = config(
@@ -116,6 +116,7 @@ wac_commands_schema = {
         {'name': 'alias', 'type': 'string', 'optional': True, "sort": True},
         {'name': 'accuracy', 'type': 'float', 'optional': True},
         {'name': 'source', 'type': 'string', 'optional': True, "sort": True},
+        {'name': 'timestamp', 'type': 'int64', 'optional': True},
         {
             "name": "all-MiniLM-L12-v2",
             "type": "float[]",
@@ -178,7 +179,7 @@ async def startup_event():
 # WAC Search
 
 
-def wac_search(command, exact_match=False, distance=SEARCH_DISTANCE, num_results=CORRECT_ATTEMPTS, raw=False, token_match_threshold=TOKEN_MATCH_THRESHOLD, semantic="off", vector_distance_threshold=VECTOR_DISTANCE_THRESHOLD, fusion_score_threshold=FUSION_SCORE_THRESHOLD):
+def wac_search(command, exact_match=False, distance=SEARCH_DISTANCE, num_results=CORRECT_ATTEMPTS, raw=False, token_match_threshold=TOKEN_MATCH_THRESHOLD, semantic="off", vector_distance_threshold=VECTOR_DISTANCE_THRESHOLD, hybrid_score_threshold=HYBRID_SCORE_THRESHOLD):
     # Set fail by default
     success = False
     wac_command = command
@@ -186,22 +187,28 @@ def wac_search(command, exact_match=False, distance=SEARCH_DISTANCE, num_results
     # Absurd values to always lose if something goes wrong
     tokens_matched = 0
     vector_distance = 10.0
-    fusion_score = 0.0
+    hybrid_score = 0.0
 
     # Do not change these unless you know what you are doing
     wac_search_parameters = {
         'q': command,
         'query_by': 'command',
-        'sort_by': '_text_match:desc,rank:desc',
+        'sort_by': '_text_match:desc,rank:desc,timestamp:desc',
         'text_match_type': 'max_score',
         'prioritize_token_position': False,
         'drop_tokens_threshold': 1,
-        'typo_tokens_threshold': 2,
+        'typo_tokens_threshold': 1,
         'split_join_tokens': 'fallback',
         'num_typos': distance,
-        'min_len_1typo': 1,
-        'min_len_2typo': 1,
-        'per_page': num_results
+        'min_len_1typo': 2,
+        'min_len_2typo': 4,
+        'per_page': num_results,
+        'limit_hits': num_results,
+        'prefix': False,
+        'use_cache': False,
+        'exclude_fields': 'all-MiniLM-L12-v2,gte-small,multilingual-e5-small',
+        'search_cutoff_ms': 100,
+        'max_candidates': 4,
     }
     if exact_match is True:
         log.info(f"Doing exact match WAC Search")
@@ -248,15 +255,15 @@ def wac_search(command, exact_match=False, distance=SEARCH_DISTANCE, num_results
                 log.info(
                     f"WAC Semantic Search didn't meet vector distance threshold {vector_distance_threshold} with result {vector_distance} from source {source}")
         elif semantic == "hybrid":
-            fusion_score = json_get(
+            hybrid_score = json_get(
                 wac_search_result, "/hits[0]/hybrid_search_info/rank_fusion_score")
-            if fusion_score >= fusion_score_threshold:
+            if hybrid_score >= hybrid_score_threshold:
                 log.info(
-                    f"WAC Semantic Hybrid Search passed fusion score threshold {fusion_score_threshold} with result {fusion_score} from source {source}")
+                    f"WAC Semantic Hybrid Search passed hybrid score threshold {hybrid_score_threshold} with result {hybrid_score} from source {source}")
                 success = True
             else:
                 log.info(
-                    f"WAC Semantic Hybrid Search didn't meet fusion score threshold {fusion_score_threshold} with result {fusion_score} from source {source}")
+                    f"WAC Semantic Hybrid Search didn't meet hybrid score threshold {hybrid_score_threshold} with result {hybrid_score} from source {source}")
         # Regular old token match
         else:
             if tokens_matched >= token_match_threshold:
@@ -286,10 +293,15 @@ def wac_add(command):
             log.info('Refusing to add duplicate command')
             return learned
 
+        # Get current time as int
+        curr_dt = datetime.now()
+        timestamp = int(round(curr_dt.timestamp()))
+        log.info(f"Current timestamp: {timestamp}")
         command_json = {
             'command': command,
             'rank': 1.0,
             'source': 'autolearn',
+            'timestamp': timestamp,
         }
         # Use create to update in real time
         typesense_client.collections[COLLECTION].documents.create(command_json)
@@ -304,19 +316,25 @@ def wac_add(command):
 # Request coming from proxy
 
 
-def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_match_threshold=TOKEN_MATCH_THRESHOLD, exact_match=False, semantic="off", vector_distance_threshold=VECTOR_DISTANCE_THRESHOLD, fusion_score_threshold=FUSION_SCORE_THRESHOLD):
+def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_match_threshold=TOKEN_MATCH_THRESHOLD, exact_match=False, semantic="off", vector_distance_threshold=VECTOR_DISTANCE_THRESHOLD, hybrid_score_threshold=HYBRID_SCORE_THRESHOLD):
 
     log.info(
-        f"Processing proxy request for command '{command}' with distance {distance} token match threshold {token_match_threshold} exact match {exact_match} semantic {semantic} with vector distance threshold {vector_distance_threshold} and hybrid threshold {fusion_score_threshold}")
+        f"Processing proxy request for command '{command}' with distance {distance} token match threshold {token_match_threshold} exact match {exact_match} semantic {semantic} with vector distance threshold {vector_distance_threshold} and hybrid threshold {hybrid_score_threshold}")
     # Init speech for when all else goes wrong
     speech = "Sorry, I can't find that command."
     # Default to command isn't learned
     learned = False
 
     try:
-        ha_data = {"text": command, "language": language}
         log.info(f"Trying initial HA intent match '{command}'")
-        ha_response = requests.post(HA_URL, headers=ha_headers, json=ha_data)
+        ha_data = {"text": command, "language": language}
+        time_start = datetime.now()
+        ha_response = requests.post(
+            HA_URL, headers=ha_headers, json=ha_data)
+        time_end = datetime.now()
+        ha_time = time_end - time_start
+        ha_time_milliseconds = ha_time.total_seconds() * 1000
+        log.info('HA took ' + str(ha_time_milliseconds) + ' ms')
         ha_response = ha_response.json()
         code = json_get_default(
             ha_response, "/response/data/code", "intent_match")
@@ -338,7 +356,7 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
 
     # Do WAC Search
     wac_success, wac_command = wac_search(command, exact_match=exact_match, distance=distance, num_results=CORRECT_ATTEMPTS, raw=False,
-                                          token_match_threshold=token_match_threshold, semantic=semantic, vector_distance_threshold=vector_distance_threshold, fusion_score_threshold=fusion_score_threshold)
+                                          token_match_threshold=token_match_threshold, semantic=semantic, vector_distance_threshold=vector_distance_threshold, hybrid_score_threshold=hybrid_score_threshold)
 
     if wac_success:
 
@@ -347,8 +365,13 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
             log.info(
                 f"Attempting WAC HA Intent Match with command '{wac_command}' from provided command '{command}'")
             ha_data = {"text": wac_command, "language": language}
+            time_start = datetime.now()
             ha_response = requests.post(
                 HA_URL, headers=ha_headers, json=ha_data)
+            time_end = datetime.now()
+            ha_time = time_end - time_start
+            ha_time_milliseconds = ha_time.total_seconds() * 1000
+            log.info('HA took ' + str(ha_time_milliseconds) + ' ms')
             ha_response = ha_response.json()
             code = json_get_default(
                 ha_response, "/response/data/code", "intent_match")
@@ -397,7 +420,7 @@ async def api_get_wac(request: Request, command, distance: Optional[str] = SEARC
 
 
 @app.post("/api/proxy")
-async def api_post_proxy(request: Request, distance: Optional[int] = SEARCH_DISTANCE, token_match_threshold: Optional[int] = TOKEN_MATCH_THRESHOLD, exact_match: Optional[bool] = False, semantic: Optional[str] = "off", vector_distance_threshold: Optional[float] = VECTOR_DISTANCE_THRESHOLD, fusion_score_threshold: Optional[float] = FUSION_SCORE_THRESHOLD):
+async def api_post_proxy(request: Request, distance: Optional[int] = SEARCH_DISTANCE, token_match_threshold: Optional[int] = TOKEN_MATCH_THRESHOLD, exact_match: Optional[bool] = False, semantic: Optional[str] = "off", vector_distance_threshold: Optional[float] = VECTOR_DISTANCE_THRESHOLD, hybrid_score_threshold: Optional[float] = HYBRID_SCORE_THRESHOLD):
     time_start = datetime.now()
     request_json = await request.json()
     language = json_get_default(request_json, "/language", "en")
@@ -410,7 +433,7 @@ async def api_post_proxy(request: Request, distance: Optional[int] = SEARCH_DIST
         semantic = "off"
 
     response = api_post_proxy_handler(text, language, distance=distance, token_match_threshold=token_match_threshold,
-                                      exact_match=exact_match, semantic=semantic, vector_distance_threshold=vector_distance_threshold, fusion_score_threshold=fusion_score_threshold)
+                                      exact_match=exact_match, semantic=semantic, vector_distance_threshold=vector_distance_threshold, hybrid_score_threshold=hybrid_score_threshold)
     time_end = datetime.now()
     search_time = time_end - time_start
     search_time_milliseconds = search_time.total_seconds() * 1000
