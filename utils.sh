@@ -11,9 +11,7 @@ else
     echo "Using default configuration values"
 fi
 
-#Import source the .env file
 set -a
-source .env
 
 # Set the basics
 TAG=${TAG:-latest}
