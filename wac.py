@@ -180,7 +180,7 @@ async def startup_event():
 # WAC Search
 
 
-def wac_search(command, exact_match=False, distance=SEARCH_DISTANCE, num_results=CORRECT_ATTEMPTS, raw=False, token_match_threshold=TOKEN_MATCH_THRESHOLD, semantic="off", vector_distance_threshold=VECTOR_DISTANCE_THRESHOLD, hybrid_score_threshold=HYBRID_SCORE_THRESHOLD):
+def wac_search(command, exact_match=False, distance=SEARCH_DISTANCE, num_results=CORRECT_ATTEMPTS, raw=False, token_match_threshold=TOKEN_MATCH_THRESHOLD, semantic="off", semantic_model=TYPESENSE_SEMANTIC_MODEL, vector_distance_threshold=VECTOR_DISTANCE_THRESHOLD, hybrid_score_threshold=HYBRID_SCORE_THRESHOLD):
     # Set fail by default
     success = False
     wac_command = command
@@ -218,14 +218,14 @@ def wac_search(command, exact_match=False, distance=SEARCH_DISTANCE, num_results
     # Support per request semantic or hybrid semantic search
     if semantic == "hybrid":
         log.info(
-            f"Doing hybrid semantic WAC Search with model {TYPESENSE_SEMANTIC_MODEL}")
+            f"Doing hybrid semantic WAC Search with model {semantic_model}")
         wac_search_parameters.update(
-            {'query_by': f'command,{TYPESENSE_SEMANTIC_MODEL}'})
+            {'query_by': f'command,{semantic_model}'})
     elif semantic == "on":
         log.info(
-            f"Doing semantic WAC Search with model {TYPESENSE_SEMANTIC_MODEL}")
+            f"Doing semantic WAC Search with model {semantic_model}")
         wac_search_parameters.update(
-            {'query_by': f'{TYPESENSE_SEMANTIC_MODEL}'})
+            {'query_by': f'{semantic_model}'})
 
     # Try WAC search
     try:
@@ -318,7 +318,7 @@ def wac_add(command):
 # Request coming from proxy
 
 
-def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_match_threshold=TOKEN_MATCH_THRESHOLD, exact_match=False, semantic="off", vector_distance_threshold=VECTOR_DISTANCE_THRESHOLD, hybrid_score_threshold=HYBRID_SCORE_THRESHOLD):
+def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_match_threshold=TOKEN_MATCH_THRESHOLD, exact_match=False, semantic="off", semantic_model=TYPESENSE_SEMANTIC_MODEL, vector_distance_threshold=VECTOR_DISTANCE_THRESHOLD, hybrid_score_threshold=HYBRID_SCORE_THRESHOLD):
 
     log.info(
         f"Processing proxy request for command '{command}' with distance {distance} token match threshold {token_match_threshold} exact match {exact_match} semantic {semantic} with vector distance threshold {vector_distance_threshold} and hybrid threshold {hybrid_score_threshold}")
@@ -358,7 +358,7 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
 
     # Do WAC Search
     wac_success, wac_command = wac_search(command, exact_match=exact_match, distance=distance, num_results=CORRECT_ATTEMPTS, raw=False,
-                                          token_match_threshold=token_match_threshold, semantic=semantic, vector_distance_threshold=vector_distance_threshold, hybrid_score_threshold=hybrid_score_threshold)
+                                          token_match_threshold=token_match_threshold, semantic=semantic, semantic_model=semantic_model, vector_distance_threshold=vector_distance_threshold, hybrid_score_threshold=hybrid_score_threshold)
 
     if wac_success:
 
@@ -417,12 +417,12 @@ async def api_get_wac(request: Request, command, distance: Optional[str] = SEARC
 
 
 class PostProxyBody(BaseModel):
-    text: str
+    text: Optional[str] = "How many lights are on?"
     language: Optional[str] = "en"
 
 
 @app.post("/api/proxy")
-async def api_post_proxy(request: Request, body: PostProxyBody, distance: Optional[int] = SEARCH_DISTANCE, token_match_threshold: Optional[int] = TOKEN_MATCH_THRESHOLD, exact_match: Optional[bool] = False, semantic: Optional[str] = "off", vector_distance_threshold: Optional[float] = VECTOR_DISTANCE_THRESHOLD, hybrid_score_threshold: Optional[float] = HYBRID_SCORE_THRESHOLD):
+async def api_post_proxy(request: Request, body: PostProxyBody, distance: Optional[int] = SEARCH_DISTANCE, token_match_threshold: Optional[int] = TOKEN_MATCH_THRESHOLD, exact_match: Optional[bool] = False, semantic: Optional[str] = "off", vector_distance_threshold: Optional[float] = VECTOR_DISTANCE_THRESHOLD, hybrid_score_threshold: Optional[float] = HYBRID_SCORE_THRESHOLD, semantic_model: Optional[str] = TYPESENSE_SEMANTIC_MODEL):
     time_start = datetime.now()
     request_json = await request.json()
     language = json_get_default(request_json, "/language", "en")
@@ -435,7 +435,7 @@ async def api_post_proxy(request: Request, body: PostProxyBody, distance: Option
         semantic = "off"
 
     response = api_post_proxy_handler(body.text, body.language, distance=distance, token_match_threshold=token_match_threshold,
-                                      exact_match=exact_match, semantic=semantic, vector_distance_threshold=vector_distance_threshold, hybrid_score_threshold=hybrid_score_threshold)
+                                      exact_match=exact_match, semantic=semantic, semantic_model=semantic_model, vector_distance_threshold=vector_distance_threshold, hybrid_score_threshold=hybrid_score_threshold)
     time_end = datetime.now()
     search_time = time_end - time_start
     search_time_milliseconds = search_time.total_seconds() * 1000
