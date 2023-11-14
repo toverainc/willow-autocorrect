@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse, PlainTextResponse
 from jsonget import json_get, json_get_default
+from pydantic import BaseModel
 from typing import Optional
 import json
 import logging
@@ -415,8 +416,13 @@ async def api_get_wac(request: Request, command, distance: Optional[str] = SEARC
     return JSONResponse(content=results)
 
 
+class PostProxyBody(BaseModel):
+    text: str
+    language: Optional[str] = "en"
+
+
 @app.post("/api/proxy")
-async def api_post_proxy(request: Request, distance: Optional[int] = SEARCH_DISTANCE, token_match_threshold: Optional[int] = TOKEN_MATCH_THRESHOLD, exact_match: Optional[bool] = False, semantic: Optional[str] = "off", vector_distance_threshold: Optional[float] = VECTOR_DISTANCE_THRESHOLD, hybrid_score_threshold: Optional[float] = HYBRID_SCORE_THRESHOLD):
+async def api_post_proxy(request: Request, body: PostProxyBody, distance: Optional[int] = SEARCH_DISTANCE, token_match_threshold: Optional[int] = TOKEN_MATCH_THRESHOLD, exact_match: Optional[bool] = False, semantic: Optional[str] = "off", vector_distance_threshold: Optional[float] = VECTOR_DISTANCE_THRESHOLD, hybrid_score_threshold: Optional[float] = HYBRID_SCORE_THRESHOLD):
     time_start = datetime.now()
     request_json = await request.json()
     language = json_get_default(request_json, "/language", "en")
@@ -428,7 +434,7 @@ async def api_post_proxy(request: Request, distance: Optional[int] = SEARCH_DIST
     elif semantic == "false":
         semantic = "off"
 
-    response = api_post_proxy_handler(text, language, distance=distance, token_match_threshold=token_match_threshold,
+    response = api_post_proxy_handler(body.text, body.language, distance=distance, token_match_threshold=token_match_threshold,
                                       exact_match=exact_match, semantic=semantic, vector_distance_threshold=vector_distance_threshold, hybrid_score_threshold=hybrid_score_threshold)
     time_end = datetime.now()
     search_time = time_end - time_start
