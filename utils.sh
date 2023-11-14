@@ -7,11 +7,14 @@ cd "$WAC_DIR"
 if [ -r .env ]; then
     echo "Using configuration overrides from .env file"
     . .env
-else
-    echo "Using default configuration values"
 fi
 
 set -a
+
+if [ -z "$HA_URL" ] || [ -z "$HA_TOKEN" ];then
+    echo "You need to create .env with at least HA_TOKEN and HA_URL - exiting"
+    exit 1
+fi
 
 # Set the basics
 TAG=${TAG:-latest}
