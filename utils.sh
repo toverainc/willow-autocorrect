@@ -62,7 +62,7 @@ run|start)
     TYPESENSE_HOST=${TYPESENSE_HOST:-"$WAC_IP"}
 
     docker run --rm -it -p "$WAC_PORT":9000 -v $WAC_DIR:/app -e TYPESENSE_HOST \
-        -e TYPESENSE_API_KEY "$IMAGE":"$TAG"
+        -e TYPESENSE_API_KEY --name wac "$IMAGE":"$TAG"
 ;;
 
 shell)
@@ -77,7 +77,7 @@ wipe)
 
 typesense|ts)
     docker run --rm -it -p "$TYPESENSE_PORT":8108 \
-        -v"$TYPESENSE_DIR":/data "$TYPESENSE" \
+        -v"$TYPESENSE_DIR":/data --name wac-ts "$TYPESENSE" \
         --data-dir /data \
         --api-key="$TYPESENSE_API_KEY"
 ;;

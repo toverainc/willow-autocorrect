@@ -155,7 +155,7 @@ wac_commands_schema = {
         },
     ],
     'default_sorting_field': 'rank',
-    "token_separators": [".", "-"]
+    "token_separators": [",", ".", "-"]
 }
 
 
@@ -193,15 +193,15 @@ def wac_search(command, exact_match=False, distance=SEARCH_DISTANCE, num_results
     wac_search_parameters = {
         'q': command,
         'query_by': 'command',
-        'sort_by': '_text_match:desc,rank:desc,timestamp:desc',
+        'sort_by': '_text_match:desc,rank:desc,accuracy:desc',
         'text_match_type': 'max_score',
         'prioritize_token_position': False,
         'drop_tokens_threshold': 1,
         'typo_tokens_threshold': 1,
         'split_join_tokens': 'fallback',
         'num_typos': distance,
-        'min_len_1typo': 2,
-        'min_len_2typo': 4,
+        'min_len_1typo': 3,
+        'min_len_2typo': 6,
         'per_page': num_results,
         'limit_hits': num_results,
         'prefix': False,
@@ -241,8 +241,8 @@ def wac_search(command, exact_match=False, distance=SEARCH_DISTANCE, num_results
         wac_command = json_get(wac_search_result, "/hits[0]/document/command")
         source = json_get(wac_search_result, "/hits[0]/document/source")
 
-        # Semantic handling
         log.info(f"Trying scoring evaluation with top match '{wac_command}'")
+        # Semantic handling
         if semantic == "on":
             vector_distance = json_get(
                 wac_search_result, "/hits[0]/vector_distance")
@@ -300,6 +300,7 @@ def wac_add(command):
         command_json = {
             'command': command,
             'rank': 1.0,
+            'accuracy': 1.0,
             'source': 'autolearn',
             'timestamp': timestamp,
         }
