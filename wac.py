@@ -70,7 +70,7 @@ app = FastAPI(title="WAC Proxy",
               description="Willow Auto Correct REST Proxy",
               version="0.1",
               openapi_url="/openapi.json",
-              docs_url="/docs",
+              docs_url="/",
               redoc_url="/redoc")
 
 log = logging.getLogger("WAC")
@@ -392,11 +392,6 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
 
     log.info(f"Final speech response '{speech}'")
     return speech
-
-
-@app.get("/")
-def read_root():
-    return {"Hello": "World"}
 
 
 @app.get("/api/search", summary="WAC Search", response_description="WAC Search")
