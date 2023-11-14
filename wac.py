@@ -46,12 +46,12 @@ TOKEN_MATCH_THRESHOLD = config(
 # NOTE: Different models have different score mechanisms
 # This will likely need to get adjusted if you use models other than all-MiniLM-L12-v2
 VECTOR_DISTANCE_THRESHOLD = config(
-    'VECTOR_DISTANCE_THRESHOLD', default=0.5, cast=float)
+    'VECTOR_DISTANCE_THRESHOLD', default=0.29, cast=float)
 
 # Hybrid/fusion search threshold.
 # larger float = closer (reverse of vector distance)
 HYBRID_SCORE_THRESHOLD = config(
-    'HYBRID_SCORE_THRESHOLD', default=0.5, cast=float)
+    'HYBRID_SCORE_THRESHOLD', default=0.85, cast=float)
 
 # Typesense embedding model to use
 TYPESENSE_SEMANTIC_MODEL = config(
