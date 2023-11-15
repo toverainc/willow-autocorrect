@@ -472,8 +472,8 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
                 log.info(f"WAC Command HA Intent Match: '{wac_command}'")
 
             # Set speech to HA response - whatever it is at this point
-            speech = json_get(
-                ha_response, "/response/speech/plain/speech", str)
+            speech = json_get_default(
+                ha_response, "/response/speech/plain/speech", "Success")
             log.info(f"HA speech: '{speech}'")
             speech = f"{speech} with corrected command {wac_command}"
             log.info(f"Setting final speech to '{speech}'")
