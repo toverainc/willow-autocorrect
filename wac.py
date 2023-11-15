@@ -11,6 +11,11 @@ from datetime import datetime
 from decouple import config
 import typesense
 
+# For typesense-server when not in dev mode
+import subprocess
+import threading
+import time
+
 HA_URL = config('HA_URL', default="http://homeassistant.local:8123", cast=str)
 HA_TOKEN = config('HA_TOKEN', default=None, cast=str)
 LOG_LEVEL = config('LOG_LEVEL', default="debug", cast=str)
@@ -24,6 +29,14 @@ TYPESENSE_PROTOCOL = config('TYPESENSE_PROTOCOL', default='http', cast=str)
 TYPESENSE_SLOW_TIMEOUT = config(
     'TYPESENSE_SLOW_TIMEOUT', default=120, cast=int)
 TYPESENSE_TIMEOUT = config('TYPESENSE_TIMEOUT', default=1, cast=int)
+
+# "Prod" vs "dev"
+RUN_MODE = config(f'RUN_MODE', default="prod", cast=str)
+if RUN_MODE == "prod":
+    TYPESENSE_HOST = "127.0.0.1"
+    TYPESENSE_PORT = 8108
+    TYPESENSE_PROTOCOL = "http"
+
 
 # HA
 HA_TOKEN = f'Bearer {HA_TOKEN}'
@@ -65,6 +78,25 @@ logging.basicConfig(
     format='%(asctime)s %(levelname)-8s %(message)s',
     level=logging.INFO,
     datefmt='%Y-%m-%d %H:%M:%S')
+
+# Typesense
+
+
+def start_typesense():
+    def run(job):
+        proc = subprocess.Popen(job)
+        proc.wait()
+        return proc
+
+    # Fix this in prod to use some kind of unique/user provided/etc key. Not that big of a deal but...
+    job = ['/usr/local/sbin/typesense-server', '--data-dir=/app/data/ts',
+           f'--api-key={TYPESENSE_API_KEY}', '--log-dir=/dev/shm']
+
+    # server thread will remain active as long as FastAPI thread is running
+    thread = threading.Thread(name='typesense-server',
+                              target=run, args=(job,), daemon=True)
+    thread.start()
+
 
 app = FastAPI(title="WAC Proxy",
               description="Willow Auto Correct REST Proxy",
@@ -174,6 +206,11 @@ def init_typesense():
 
 @app.on_event("startup")
 async def startup_event():
+    if RUN_MODE == "prod":
+        log.info('Starting Typesense')
+        start_typesense()
+        log.info('Typesense started. Waiting for ready...')
+        time.sleep(5)
     init_typesense()
 
 # Add HA entities
