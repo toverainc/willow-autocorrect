@@ -433,10 +433,10 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
         else:
             log.info(f"Initial HA Intent Match for command '{command}'")
             learned = wac_add(command, rank=0.9, source='autolearn')
+            speech = json_get_default(
+                ha_response, "/response/speech/plain/speech", "Success")
             # Set speech to HA response and return
-            log.info('Setting speech to HA response')
-            speech = json_get(
-                ha_response, "/response/speech/plain/speech", str)
+            log.info(f"Setting speech to HA response '{speech}'")
             if learned is True:
                 speech = f"{speech} and learned command"
             log.info('HA took ' + str(first_ha_time_milliseconds) + ' ms')
