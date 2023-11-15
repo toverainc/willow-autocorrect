@@ -70,6 +70,10 @@ HYBRID_SCORE_THRESHOLD = config(
 TYPESENSE_SEMANTIC_MODEL = config(
     'TYPESENSE_SEMANTIC_MODEL', default='all-MiniLM-L12-v2', cast=str)
 
+# Default semantic mode
+TYPESENSE_SEMANTIC_MODE = config(
+    'TYPESENSE_SEMANTIC_MODE', default='hybrid', cast=str)
+
 # The typesense collection to use
 COLLECTION = config(
     'COLLECTION', default='commands', cast=str)
@@ -516,7 +520,7 @@ async def api_delete(id: int):
 
 
 @app.get("/api/search", summary="WAC Search", response_description="WAC Search")
-async def api_get_wac(command, distance: Optional[str] = SEARCH_DISTANCE, num_results: Optional[str] = CORRECT_ATTEMPTS, exact_match: Optional[bool] = False, semantic: Optional[str] = "off"):
+async def api_get_wac(command, distance: Optional[str] = SEARCH_DISTANCE, num_results: Optional[str] = CORRECT_ATTEMPTS, exact_match: Optional[bool] = False, semantic: Optional[str] = TYPESENSE_SEMANTIC_MODE, semantic_model: Optional[str] = TYPESENSE_SEMANTIC_MODEL):
     time_start = datetime.now()
 
     # Little fix for compatibility
@@ -526,7 +530,7 @@ async def api_get_wac(command, distance: Optional[str] = SEARCH_DISTANCE, num_re
         semantic = "off"
 
     results = wac_search(command, exact_match=exact_match,
-                         distance=distance, num_results=num_results, raw=True, semantic=semantic)
+                         distance=distance, num_results=num_results, raw=True, semantic=semantic, semantic_model=semantic_model)
 
     time_end = datetime.now()
     search_time = time_end - time_start
@@ -541,7 +545,7 @@ class PostProxyBody(BaseModel):
 
 
 @app.post("/api/proxy", summary="Proxy Willow Requests", response_description="WAC Response")
-async def api_post_proxy(body: PostProxyBody, distance: Optional[int] = SEARCH_DISTANCE, token_match_threshold: Optional[int] = TOKEN_MATCH_THRESHOLD, exact_match: Optional[bool] = False, semantic: Optional[str] = "hybrid", vector_distance_threshold: Optional[float] = VECTOR_DISTANCE_THRESHOLD, hybrid_score_threshold: Optional[float] = HYBRID_SCORE_THRESHOLD, semantic_model: Optional[str] = TYPESENSE_SEMANTIC_MODEL):
+async def api_post_proxy(body: PostProxyBody, distance: Optional[int] = SEARCH_DISTANCE, token_match_threshold: Optional[int] = TOKEN_MATCH_THRESHOLD, exact_match: Optional[bool] = False, semantic: Optional[str] = TYPESENSE_SEMANTIC_MODE, vector_distance_threshold: Optional[float] = VECTOR_DISTANCE_THRESHOLD, hybrid_score_threshold: Optional[float] = HYBRID_SCORE_THRESHOLD, semantic_model: Optional[str] = TYPESENSE_SEMANTIC_MODEL):
     time_start = datetime.now()
 
     # Little fix for compatibility
