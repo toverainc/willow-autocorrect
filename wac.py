@@ -420,7 +420,7 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
         ha_data = {"text": command, "language": language}
         time_start = datetime.now()
         ha_response = requests.post(
-            url, headers=ha_headers, json=ha_data)
+            url, headers=ha_headers, json=ha_data, timeout=(1, 10))
         time_end = datetime.now()
         ha_time = time_end - time_start
         first_ha_time_milliseconds = ha_time.total_seconds() * 1000
@@ -441,8 +441,9 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
                 speech = f"{speech} and learned command"
             log.info('HA took ' + str(first_ha_time_milliseconds) + ' ms')
             return speech
-    except:
-        pass
+    except Exception as e:
+        log.exception(f"WAC FAILED with {e}")
+        return "Willow auto correct encountered an error!"
 
     # Do WAC Search
     wac_success, wac_command = wac_search(command, exact_match=exact_match, distance=distance, num_results=CORRECT_ATTEMPTS, raw=False,
@@ -457,7 +458,7 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
             ha_data = {"text": wac_command, "language": language}
             time_start = datetime.now()
             ha_response = requests.post(
-                url, headers=ha_headers, json=ha_data)
+                url, headers=ha_headers, json=ha_data, timeout=(1, 10))
             time_end = datetime.now()
             ha_time = time_end - time_start
             second_ha_time_milliseconds = ha_time.total_seconds() * 1000
@@ -477,8 +478,9 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
             log.info(f"HA speech: '{speech}'")
             speech = f"{speech} with corrected command {wac_command}"
             log.info(f"Setting final speech to '{speech}'")
-        except:
-            pass
+        except Exception as e:
+            log.exception(f"WAC FAILED with {e}")
+            return "Willow auto correct encountered an error!"
 
     if second_ha_time_milliseconds is not None:
         total_ha_time = first_ha_time_milliseconds + second_ha_time_milliseconds
