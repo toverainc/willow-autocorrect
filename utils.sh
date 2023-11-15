@@ -51,10 +51,6 @@ freeze-requirements|fr)
     freeze_requirements
 ;;
 
-gen_commands|gc)
-    docker run --rm -it -v $WAC_DIR:/app "$IMAGE":"$TAG" python3 generate_commands.py
-;;
-
 run|start)
     # Reachable WAC IP for the "default" interface
     WAC_IP=$(ip route get 1.1.1.1 | grep -oP 'src \K\S+')
