@@ -414,8 +414,7 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
             url, headers=ha_headers, json=ha_data)
         time_end = datetime.now()
         ha_time = time_end - time_start
-        ha_time_milliseconds = ha_time.total_seconds() * 1000
-        log.info('HA took ' + str(ha_time_milliseconds) + ' ms')
+        first_ha_time_milliseconds = ha_time.total_seconds() * 1000
         ha_response = ha_response.json()
         code = json_get_default(
             ha_response, "/response/data/code", "intent_match")
@@ -431,6 +430,7 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
                 ha_response, "/response/speech/plain/speech", str)
             if learned is True:
                 speech = f"{speech} and learned command"
+            log.info('HA took ' + str(first_ha_time_milliseconds) + ' ms')
             return speech
     except:
         pass
@@ -451,8 +451,8 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
                 url, headers=ha_headers, json=ha_data)
             time_end = datetime.now()
             ha_time = time_end - time_start
-            ha_time_milliseconds = ha_time.total_seconds() * 1000
-            log.info('HA took ' + str(ha_time_milliseconds) + ' ms')
+            second_ha_time_milliseconds = ha_time.total_seconds() * 1000
+            log.info('HA took ' + str(second_ha_time_milliseconds) + ' ms')
             ha_response = ha_response.json()
             code = json_get_default(
                 ha_response, "/response/data/code", "intent_match")
@@ -471,7 +471,9 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
         except:
             pass
 
+    total_ha_time = first_ha_time_milliseconds + second_ha_time_milliseconds
     log.info(f"Final speech response '{speech}'")
+    log.info(f"Total HA time is {total_ha_time} ms")
     return speech
 
 
@@ -529,5 +531,5 @@ async def api_post_proxy(body: PostProxyBody, distance: Optional[int] = SEARCH_D
     time_end = datetime.now()
     search_time = time_end - time_start
     search_time_milliseconds = search_time.total_seconds() * 1000
-    log.info('WAC proxy took ' + str(search_time_milliseconds) + ' ms')
+    log.info('WAC proxy total time ' + str(search_time_milliseconds) + ' ms')
     return PlainTextResponse(content=response)
