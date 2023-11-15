@@ -358,8 +358,8 @@ def wac_search(command, exact_match=False, distance=SEARCH_DISTANCE, num_results
                 log.info(
                     f"WAC Search didn't meet threshold {token_match_threshold} with result {tokens_matched}")
 
-    except:
-        log.info(f"WAC Search for command '{command}' not found")
+    except Exception as e:
+        log.exception(f"WAC search for command '{command}' failed with {e}")
 
     return success, wac_command
 
@@ -392,8 +392,8 @@ def wac_add(command, rank=0.9, source='autolearn'):
         typesense_client.collections[COLLECTION].documents.create(command_json)
         log.info(f"Added WAC command '{command}'")
         learned = True
-    except:
-        log.error(f"WAC Add for command '{command}' failed!")
+    except Exception as e:
+        log.exception(f"WAC Add for command '{command}' failed with {e}")
 
     return learned
 
