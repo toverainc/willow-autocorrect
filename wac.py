@@ -313,13 +313,15 @@ def wac_search(command, exact_match=False, distance=SEARCH_DISTANCE, num_results
         # For management API
         if raw:
             return wac_search_result
+        id = json_get(wac_search_result, "/hits[0]/document/id")
         text_score = json_get(wac_search_result, "/hits[0]/text_match")
         tokens_matched = json_get(
             wac_search_result, "/hits[0]/text_match_info/tokens_matched")
         wac_command = json_get(wac_search_result, "/hits[0]/document/command")
         source = json_get(wac_search_result, "/hits[0]/document/source")
 
-        log.info(f"Trying scoring evaluation with top match '{wac_command}'")
+        log.info(
+            f"Trying scoring evaluation with top match '{wac_command}' with id {id} from source {source}")
         # Semantic handling
         if semantic == "on":
             vector_distance = json_get(
@@ -327,30 +329,30 @@ def wac_search(command, exact_match=False, distance=SEARCH_DISTANCE, num_results
 
             if vector_distance <= vector_distance_threshold:
                 log.info(
-                    f"WAC Semantic Search passed vector distance threshold {vector_distance_threshold} with result {vector_distance} from source {source}")
+                    f"WAC Semantic Search passed vector distance threshold {vector_distance_threshold} with result {vector_distance}")
                 success = True
             else:
                 log.info(
-                    f"WAC Semantic Search didn't meet vector distance threshold {vector_distance_threshold} with result {vector_distance} from source {source}")
+                    f"WAC Semantic Search didn't meet vector distance threshold {vector_distance_threshold} with result {vector_distance}")
         elif semantic == "hybrid":
             hybrid_score = json_get(
                 wac_search_result, "/hits[0]/hybrid_search_info/rank_fusion_score")
             if hybrid_score >= hybrid_score_threshold:
                 log.info(
-                    f"WAC Semantic Hybrid Search passed hybrid score threshold {hybrid_score_threshold} with result {hybrid_score} from source {source}")
+                    f"WAC Semantic Hybrid Search passed hybrid score threshold {hybrid_score_threshold} with result {hybrid_score}")
                 success = True
             else:
                 log.info(
-                    f"WAC Semantic Hybrid Search didn't meet hybrid score threshold {hybrid_score_threshold} with result {hybrid_score} from source {source}")
+                    f"WAC Semantic Hybrid Search didn't meet hybrid score threshold {hybrid_score_threshold} with result {hybrid_score}")
         # Regular old token match
         else:
             if tokens_matched >= token_match_threshold:
                 log.info(
-                    f"WAC Search passed token threshold {token_match_threshold} with result {tokens_matched} from source {source}")
+                    f"WAC Search passed token threshold {token_match_threshold} with result {tokens_matched}")
                 success = True
             else:
                 log.info(
-                    f"WAC Search didn't meet threshold {token_match_threshold} with result {tokens_matched} from source {source}")
+                    f"WAC Search didn't meet threshold {token_match_threshold} with result {tokens_matched}")
 
     except:
         log.info(f"WAC Search for command '{command}' not found")
@@ -403,6 +405,9 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
     speech = "Sorry, I can't find that command."
     # Default to command isn't learned
     learned = False
+
+    # For logging
+    second_ha_time_milliseconds = None
 
     url = f'{HA_URL}/api/conversation/process'
 
@@ -471,7 +476,11 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
         except:
             pass
 
-    total_ha_time = first_ha_time_milliseconds + second_ha_time_milliseconds
+    if second_ha_time_milliseconds is not None:
+        total_ha_time = first_ha_time_milliseconds + second_ha_time_milliseconds
+    else:
+        total_ha_time = first_ha_time_milliseconds
+
     log.info(f"Final speech response '{speech}'")
     log.info(f"Total HA time is {total_ha_time} ms")
     return speech
@@ -489,6 +498,21 @@ async def api_reinitialize():
     typesense_client.collections[COLLECTION].delete()
     init_typesense()
     return JSONResponse(content={'success': True})
+
+
+@app.get("/api/delete", summary="Delete command")
+async def api_delete(id: int):
+    log.info(f"Attempting to delete command ID {id}")
+
+    try:
+        delete = typesense_client.collections[COLLECTION].documents[id].delete(
+        )
+        command = json_get(delete, "/command")
+        response = {'success': True, 'deleted': command}
+    except:
+        response = {'success': False}
+
+    return JSONResponse(content=response)
 
 
 @app.get("/api/search", summary="WAC Search", response_description="WAC Search")
