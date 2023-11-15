@@ -314,6 +314,7 @@ def wac_search(command, exact_match=False, distance=SEARCH_DISTANCE, num_results
             wac_search_parameters)
         # For management API
         if raw:
+            log.info(f"Returning raw results")
             return wac_search_result
         id = json_get(wac_search_result, "/hits[0]/document/id")
         text_score = json_get(wac_search_result, "/hits[0]/text_match")
