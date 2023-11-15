@@ -26,7 +26,6 @@ TYPESENSE_SLOW_TIMEOUT = config(
 TYPESENSE_TIMEOUT = config('TYPESENSE_TIMEOUT', default=1, cast=int)
 
 # HA
-HA_URL = f'{HA_URL}/api/conversation/process'
 HA_TOKEN = f'Bearer {HA_TOKEN}'
 
 # Default number of search results and attempts
@@ -177,6 +176,47 @@ def init_typesense():
 async def startup_event():
     init_typesense()
 
+# Add HA entities
+
+
+def add_ha_entities():
+    log.info('Adding entities from HA')
+    entity_types = ['cover.', 'fan.', 'light.', 'switch.']
+
+    url = f"{HA_URL}/api/states"
+
+    response = requests.get(url, headers=ha_headers)
+    entities = response.json()
+
+    devices = []
+
+    for type in entity_types:
+        for entity in entities:
+            entity_id = entity['entity_id']
+
+            if entity_id.startswith(type):
+                attr = entity.get('attributes')
+                friendly_name = attr.get('friendly_name')
+                if friendly_name is None:
+                    # in case of blank or misconfigured HA entities
+                    continue
+                # Add device
+                if friendly_name not in devices:
+                    devices.append(friendly_name.lower())
+
+    # Make the devices unique
+    devices = [*set(devices)]
+
+    for device in devices:
+        on = (f'turn on {device}')
+        off = (f'turn off {device}')
+        print(f"Adding command: '{on}'")
+        print(f"Adding command: '{off}'")
+
+        wac_add(on, rank=0.5, source='ha_entities')
+        wac_add(off, rank=0.5, source='ha_entities')
+
+
 # WAC Search
 
 
@@ -283,7 +323,7 @@ def wac_search(command, exact_match=False, distance=SEARCH_DISTANCE, num_results
 # WAC Add
 
 
-def wac_add(command):
+def wac_add(command, rank=0.9, source='autolearn'):
     log.info(f"Doing WAC Add for command '{command}'")
     learned = False
     try:
@@ -300,9 +340,9 @@ def wac_add(command):
         log.info(f"Current timestamp: {timestamp}")
         command_json = {
             'command': command,
-            'rank': 1.0,
+            'rank': rank,
             'accuracy': 1.0,
-            'source': 'autolearn',
+            'source': source,
             'timestamp': timestamp,
         }
         # Use create to update in real time
@@ -327,12 +367,14 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
     # Default to command isn't learned
     learned = False
 
+    url = f'{HA_URL}/api/conversation/process'
+
     try:
         log.info(f"Trying initial HA intent match '{command}'")
         ha_data = {"text": command, "language": language}
         time_start = datetime.now()
         ha_response = requests.post(
-            HA_URL, headers=ha_headers, json=ha_data)
+            url, headers=ha_headers, json=ha_data)
         time_end = datetime.now()
         ha_time = time_end - time_start
         ha_time_milliseconds = ha_time.total_seconds() * 1000
@@ -345,7 +387,7 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
             log.info(f"No Initial HA Intent Match for command '{command}'")
         else:
             log.info(f"Initial HA Intent Match for command '{command}'")
-            learned = wac_add(command)
+            learned = wac_add(command, rank=0.9, source='autolearn')
             # Set speech to HA response and return
             log.info('Setting speech to HA response')
             speech = json_get(
@@ -369,7 +411,7 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
             ha_data = {"text": wac_command, "language": language}
             time_start = datetime.now()
             ha_response = requests.post(
-                HA_URL, headers=ha_headers, json=ha_data)
+                url, headers=ha_headers, json=ha_data)
             time_end = datetime.now()
             ha_time = time_end - time_start
             ha_time_milliseconds = ha_time.total_seconds() * 1000
@@ -394,6 +436,12 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
 
     log.info(f"Final speech response '{speech}'")
     return speech
+
+
+@app.get("/api/add_ha_entities")
+async def get_add_entities():
+    add_ha_entities()
+    return JSONResponse(content={'success': True})
 
 
 @app.get("/api/search", summary="WAC Search", response_description="WAC Search")
