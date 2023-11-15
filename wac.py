@@ -517,7 +517,7 @@ class PostProxyBody(BaseModel):
 
 
 @app.post("/api/proxy", summary="Proxy Willow Requests", response_description="WAC Response")
-async def api_post_proxy(body: PostProxyBody, distance: Optional[int] = SEARCH_DISTANCE, token_match_threshold: Optional[int] = TOKEN_MATCH_THRESHOLD, exact_match: Optional[bool] = False, semantic: Optional[str] = "off", vector_distance_threshold: Optional[float] = VECTOR_DISTANCE_THRESHOLD, hybrid_score_threshold: Optional[float] = HYBRID_SCORE_THRESHOLD, semantic_model: Optional[str] = TYPESENSE_SEMANTIC_MODEL):
+async def api_post_proxy(body: PostProxyBody, distance: Optional[int] = SEARCH_DISTANCE, token_match_threshold: Optional[int] = TOKEN_MATCH_THRESHOLD, exact_match: Optional[bool] = False, semantic: Optional[str] = "hybrid", vector_distance_threshold: Optional[float] = VECTOR_DISTANCE_THRESHOLD, hybrid_score_threshold: Optional[float] = HYBRID_SCORE_THRESHOLD, semantic_model: Optional[str] = TYPESENSE_SEMANTIC_MODEL):
     time_start = datetime.now()
 
     # Little fix for compatibility
