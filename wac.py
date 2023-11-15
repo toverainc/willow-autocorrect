@@ -251,8 +251,6 @@ def add_ha_entities():
     for device in devices:
         on = (f'turn on {device}')
         off = (f'turn off {device}')
-        print(f"Adding command: '{on}'")
-        print(f"Adding command: '{off}'")
 
         wac_add(on, rank=0.5, source='ha_entities')
         wac_add(off, rank=0.5, source='ha_entities')
@@ -367,7 +365,7 @@ def wac_search(command, exact_match=False, distance=SEARCH_DISTANCE, num_results
 
 
 def wac_add(command, rank=0.9, source='autolearn'):
-    log.info(f"Doing WAC Add for command '{command}'")
+    log.info(f"Doing WAC add for command '{command}'")
     learned = False
     try:
         log.info(f"Searching WAC before adding command '{command}'")
@@ -393,7 +391,7 @@ def wac_add(command, rank=0.9, source='autolearn'):
         log.info(f"Added WAC command '{command}'")
         learned = True
     except Exception as e:
-        log.exception(f"WAC Add for command '{command}' failed with {e}")
+        log.exception(f"WAC add for command '{command}' failed with {e}")
 
     return learned
 
@@ -494,28 +492,38 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
 
 @app.get("/api/add_ha_entities", summary="Add Entities from HA", response_description="Status")
 async def api_add_ha_entities():
-    add_ha_entities()
-    return JSONResponse(content={'success': True})
+    try:
+        add_ha_entities()
+        return JSONResponse(content={'success': True})
+    except Exception as e:
+        log.exception(f"Add HA Entities failed with {e}")
+        raise HTTPException(
+            status_code=500, detail="WAC Add HA Entities Failed")
 
 
 @app.get("/api/re_init", summary="Wipe DB and Start Over", response_description="Status")
 async def api_reinitialize():
-    log.info('Re-initializing...')
-    typesense_client.collections[COLLECTION].delete()
-    init_typesense()
-    return JSONResponse(content={'success': True})
+    try:
+        log.info('Re-initializing...')
+        typesense_client.collections[COLLECTION].delete()
+        init_typesense()
+        return JSONResponse(content={'success': True})
+    except Exception as e:
+        log.exception(f"Re-init failed with {e}")
+        raise HTTPException(status_code=500, detail="WAC Re-init Failed")
 
 
 @app.get("/api/delete", summary="Delete command")
 async def api_delete(id: int):
-    log.info(f"Attempting to delete command ID {id}")
-
     try:
+        log.info(f"Attempting to delete command ID {id}")
         delete = typesense_client.collections[COLLECTION].documents[id].delete(
         )
         command = json_get(delete, "/command")
+        log.info(f"Successfully deleted command '{command}' with id {id}")
         response = {'success': True, 'deleted': command}
     except:
+        log.info(f"Failed to deleted command with id {id}")
         response = {'success': False}
 
     return JSONResponse(content=response)
@@ -523,22 +531,26 @@ async def api_delete(id: int):
 
 @app.get("/api/search", summary="WAC Search", response_description="WAC Search")
 async def api_get_wac(command, distance: Optional[str] = SEARCH_DISTANCE, num_results: Optional[str] = CORRECT_ATTEMPTS, exact_match: Optional[bool] = False, semantic: Optional[str] = TYPESENSE_SEMANTIC_MODE, semantic_model: Optional[str] = TYPESENSE_SEMANTIC_MODEL):
-    time_start = datetime.now()
+    try:
+        time_start = datetime.now()
 
-    # Little fix for compatibility
-    if semantic == "true":
-        semantic = "on"
-    elif semantic == "false":
-        semantic = "off"
+        # Little fix for compatibility
+        if semantic == "true":
+            semantic = "on"
+        elif semantic == "false":
+            semantic = "off"
 
-    results = wac_search(command, exact_match=exact_match,
-                         distance=distance, num_results=num_results, raw=True, semantic=semantic, semantic_model=semantic_model)
+        results = wac_search(command, exact_match=exact_match,
+                             distance=distance, num_results=num_results, raw=True, semantic=semantic, semantic_model=semantic_model)
 
-    time_end = datetime.now()
-    search_time = time_end - time_start
-    search_time_milliseconds = search_time.total_seconds() * 1000
-    log.info('WAC search took ' + str(search_time_milliseconds) + ' ms')
-    return JSONResponse(content=results)
+        time_end = datetime.now()
+        search_time = time_end - time_start
+        search_time_milliseconds = search_time.total_seconds() * 1000
+        log.info('WAC search took ' + str(search_time_milliseconds) + ' ms')
+        return JSONResponse(content=results)
+    except Exception as e:
+        log.exception(f"Search failed with {e}")
+        raise HTTPException(status_code=500, detail="WAC Search Failed")
 
 
 class PostProxyBody(BaseModel):
@@ -548,18 +560,23 @@ class PostProxyBody(BaseModel):
 
 @app.post("/api/proxy", summary="Proxy Willow Requests", response_description="WAC Response")
 async def api_post_proxy(body: PostProxyBody, distance: Optional[int] = SEARCH_DISTANCE, token_match_threshold: Optional[int] = TOKEN_MATCH_THRESHOLD, exact_match: Optional[bool] = False, semantic: Optional[str] = TYPESENSE_SEMANTIC_MODE, vector_distance_threshold: Optional[float] = VECTOR_DISTANCE_THRESHOLD, hybrid_score_threshold: Optional[float] = HYBRID_SCORE_THRESHOLD, semantic_model: Optional[str] = TYPESENSE_SEMANTIC_MODEL):
-    time_start = datetime.now()
+    try:
+        time_start = datetime.now()
 
-    # Little fix for compatibility
-    if semantic == "true":
-        semantic = "on"
-    elif semantic == "false":
-        semantic = "off"
+        # Little fix for compatibility
+        if semantic == "true":
+            semantic = "on"
+        elif semantic == "false":
+            semantic = "off"
 
-    response = api_post_proxy_handler(body.text, body.language, distance=distance, token_match_threshold=token_match_threshold,
-                                      exact_match=exact_match, semantic=semantic, semantic_model=semantic_model, vector_distance_threshold=vector_distance_threshold, hybrid_score_threshold=hybrid_score_threshold)
-    time_end = datetime.now()
-    search_time = time_end - time_start
-    search_time_milliseconds = search_time.total_seconds() * 1000
-    log.info('WAC proxy total time ' + str(search_time_milliseconds) + ' ms')
-    return PlainTextResponse(content=response)
+        response = api_post_proxy_handler(body.text, body.language, distance=distance, token_match_threshold=token_match_threshold,
+                                          exact_match=exact_match, semantic=semantic, semantic_model=semantic_model, vector_distance_threshold=vector_distance_threshold, hybrid_score_threshold=hybrid_score_threshold)
+        time_end = datetime.now()
+        search_time = time_end - time_start
+        search_time_milliseconds = search_time.total_seconds() * 1000
+        log.info('WAC proxy total time ' +
+                 str(search_time_milliseconds) + ' ms')
+        return PlainTextResponse(content=response)
+    except Exception as e:
+        log.exception(f"Proxy failed with {e}")
+        raise HTTPException(status_code=500, detail="WAC Proxy Failed")
