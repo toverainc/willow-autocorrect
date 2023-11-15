@@ -438,14 +438,22 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
     return speech
 
 
-@app.get("/api/add_ha_entities")
-async def get_add_entities():
+@app.get("/api/add_ha_entities", summary="Add Entities from HA", response_description="Status")
+async def api_add_ha_entities():
     add_ha_entities()
     return JSONResponse(content={'success': True})
 
 
+@app.get("/api/re_init", summary="Wipe DB and Start Over", response_description="Status")
+async def api_reinitialize():
+    log.info('Re-initializing...')
+    typesense_client.collections[COLLECTION].delete()
+    init_typesense()
+    return JSONResponse(content={'success': True})
+
+
 @app.get("/api/search", summary="WAC Search", response_description="WAC Search")
-async def api_get_wac(request: Request, command, distance: Optional[str] = SEARCH_DISTANCE, num_results: Optional[str] = CORRECT_ATTEMPTS, exact_match: Optional[bool] = False, semantic: Optional[str] = "off"):
+async def api_get_wac(command, distance: Optional[str] = SEARCH_DISTANCE, num_results: Optional[str] = CORRECT_ATTEMPTS, exact_match: Optional[bool] = False, semantic: Optional[str] = "off"):
     time_start = datetime.now()
 
     # Little fix for compatibility
@@ -469,12 +477,9 @@ class PostProxyBody(BaseModel):
     language: Optional[str] = "en"
 
 
-@app.post("/api/proxy")
-async def api_post_proxy(request: Request, body: PostProxyBody, distance: Optional[int] = SEARCH_DISTANCE, token_match_threshold: Optional[int] = TOKEN_MATCH_THRESHOLD, exact_match: Optional[bool] = False, semantic: Optional[str] = "off", vector_distance_threshold: Optional[float] = VECTOR_DISTANCE_THRESHOLD, hybrid_score_threshold: Optional[float] = HYBRID_SCORE_THRESHOLD, semantic_model: Optional[str] = TYPESENSE_SEMANTIC_MODEL):
+@app.post("/api/proxy", summary="Proxy Willow Requests", response_description="WAC Response")
+async def api_post_proxy(body: PostProxyBody, distance: Optional[int] = SEARCH_DISTANCE, token_match_threshold: Optional[int] = TOKEN_MATCH_THRESHOLD, exact_match: Optional[bool] = False, semantic: Optional[str] = "off", vector_distance_threshold: Optional[float] = VECTOR_DISTANCE_THRESHOLD, hybrid_score_threshold: Optional[float] = HYBRID_SCORE_THRESHOLD, semantic_model: Optional[str] = TYPESENSE_SEMANTIC_MODEL):
     time_start = datetime.now()
-    request_json = await request.json()
-    language = json_get_default(request_json, "/language", "en")
-    text = json_get(request_json, "/text")
 
     # Little fix for compatibility
     if semantic == "true":
