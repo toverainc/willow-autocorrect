@@ -210,7 +210,7 @@ async def startup_event():
         log.info('Starting Typesense')
         start_typesense()
         log.info('Typesense started. Waiting for ready...')
-        time.sleep(5)
+        time.sleep(10)
     init_typesense()
 
 # Add HA entities
