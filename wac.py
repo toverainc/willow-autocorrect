@@ -322,6 +322,12 @@ def wac_search(command, exact_match=False, distance=SEARCH_DISTANCE, num_results
         wac_command = json_get(wac_search_result, "/hits[0]/document/command")
         source = json_get(wac_search_result, "/hits[0]/document/source")
 
+        if exact_match and wac_command:
+            log.info(
+                f"Returning exact command '{wac_command}' match with id {id}")
+            success = True
+            return success, wac_command
+
         log.info(
             f"Trying scoring evaluation with top match '{wac_command}' with id {id} from source {source}")
         # Semantic handling
