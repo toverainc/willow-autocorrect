@@ -98,7 +98,7 @@ def start_typesense():
 
     # Fix this in prod to use some kind of unique/user provided/etc key. Not that big of a deal but...
     job = ['/usr/local/sbin/typesense-server', '--data-dir=/app/data/ts',
-           f'--api-key={TYPESENSE_API_KEY}', '--log-dir=/dev/shm']
+           f'--api-key={TYPESENSE_API_KEY}', '--log-dir=/dev/shm', '--thread-pool-size=8']
 
     # server thread will remain active as long as FastAPI thread is running
     thread = threading.Thread(name='typesense-server',
