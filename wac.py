@@ -19,8 +19,10 @@ import threading
 import time
 
 
-HA_URL_HTTP = config('HA_URL_HTTP', default="http://homeassistant.local:8123", cast=str)
-HA_URL_WS = config('HA_URL_WS', default="ws://homeassistant.local:8123", cast=str)
+HA_URL_HTTP = config(
+    'HA_URL_HTTP', default="http://homeassistant.local:8123", cast=str)
+HA_URL_WS = config(
+    'HA_URL_WS', default="ws://homeassistant.local:8123", cast=str)
 HA_TOKEN = config('HA_TOKEN', default=None, cast=str)
 LOG_LEVEL = config('LOG_LEVEL', default="debug", cast=str)
 TGI_URL = config(f'TGI_URL', default=None, cast=str)
@@ -214,7 +216,8 @@ def init_typesense():
 
 @app.on_event("startup")
 async def startup_event():
-    app.command_endpoint = HomeAssistantWebSocketEndpoint(app, HA_URL_WS, HA_TOKEN)
+    app.command_endpoint = HomeAssistantWebSocketEndpoint(
+        app, HA_URL_WS, HA_TOKEN)
     app.session_tracker = {}
 
     if RUN_MODE == "prod":
@@ -432,6 +435,7 @@ class HomeAssistantCommand(BaseModel):
     time_start: datetime = datetime.now()
     done: bool = False
 
+
 class CommandEndpointConfigException(Exception):
     """Raised when an the command endpoint configuration is invalid
 
@@ -468,6 +472,7 @@ class CommandEndpointResult():
 class CommandEndpoint():
     name = "WAC CommandEndpoint"
     log = logging.getLogger("WAC")
+
 
 class HomeAssistantWebSocketEndpoint(CommandEndpoint):
     name = "WAS Home Assistant WebSocket Endpoint"
@@ -507,9 +512,11 @@ class HomeAssistantWebSocketEndpoint(CommandEndpoint):
                 ev_type = json_get(msg, "/event/type")
                 if ev_type == "intent-end":
                     initial_id = app.session_tracker[id].initial_id
-                    response_type = json_get(msg, "/event/data/intent_output/response/response_type")
+                    response_type = json_get(
+                        msg, "/event/data/intent_output/response/response_type")
                     if response_type != "error":
-                        speech = json_get_default(msg, "/event/data/intent_output/response/speech/plain/speech", "Success")
+                        speech = json_get_default(
+                            msg, "/event/data/intent_output/response/speech/plain/speech", "Success")
 
                         if initial_id != 0:
                             log.info(f"initial_id: {initial_id}")
@@ -517,7 +524,8 @@ class HomeAssistantWebSocketEndpoint(CommandEndpoint):
                             app.session_tracker[initial_id].done = True
                             return
 
-                        learned = wac_add(app.session_tracker[id].command, rank=0.9, source='autolearn')
+                        learned = wac_add(
+                            app.session_tracker[id].command, rank=0.9, source='autolearn')
 
                         if learned:
                             speech = f"{speech} and learned command"
@@ -540,14 +548,14 @@ class HomeAssistantWebSocketEndpoint(CommandEndpoint):
                         vector_distance_threshold = app.session_tracker[id].vector_distance_threshold
 
                         wac_success, wac_command = wac_search(command, exact_match=exact_match, distance=distance, num_results=CORRECT_ATTEMPTS, raw=False,
-                            token_match_threshold=token_match_threshold, semantic=semantic, semantic_model=semantic_model, vector_distance_threshold=vector_distance_threshold, hybrid_score_threshold=hybrid_score_threshold)
+                                                              token_match_threshold=token_match_threshold, semantic=semantic, semantic_model=semantic_model, vector_distance_threshold=vector_distance_threshold, hybrid_score_threshold=hybrid_score_threshold)
 
                         if wac_success:
                             log.info(
                                 f"Attempting WAC HA Intent Match with command '{wac_command}' from provided command '{command}'")
 
-                            ha_cmd = HomeAssistantCommand(command=wac_command, initial_id=id)
-
+                            ha_cmd = HomeAssistantCommand(
+                                command=wac_command, initial_id=id)
 
                             newid = self.send({"text": ha_cmd.command})
                             app.session_tracker[newid] = ha_cmd
@@ -560,14 +568,14 @@ class HomeAssistantWebSocketEndpoint(CommandEndpoint):
                     "type": "auth",
                     "access_token": self.token,
                 }
-                self.log.info(f"authenticating HA WebSocket connection: {auth_msg}")
+                self.log.info(
+                    f"authenticating HA WebSocket connection: {auth_msg}")
                 await self.haws.send(json.dumps(auth_msg))
 
         except Exception as e:
             log.error(f"session_tracker: {self.app.session_tracker}")
             log.error(f"error occured while parsing HA msg: {e}")
             return
-
 
     def parse_response(self, response):
         return None
@@ -595,9 +603,6 @@ class HomeAssistantWebSocketEndpoint(CommandEndpoint):
         self.task.cancel()
 
 
-
-
-
 # Request coming from proxy
 
 
@@ -606,7 +611,6 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
     log.info(
         f"Processing proxy request for command '{command}' with distance {distance} token match threshold {token_match_threshold} exact match {exact_match} semantic {semantic} with vector distance threshold {vector_distance_threshold} and hybrid threshold {hybrid_score_threshold}")
     # Init speech for when all else goes wrong
-
 
     try:
         log.info(f"Trying initial HA intent match '{command}'")
@@ -768,8 +772,7 @@ async def api_post_proxy(
             semantic = "off"
 
         id = api_post_proxy_handler(body.text, body.language, distance=distance, token_match_threshold=token_match_threshold,
-                                          exact_match=exact_match, semantic=semantic, semantic_model=semantic_model, vector_distance_threshold=vector_distance_threshold, hybrid_score_threshold=hybrid_score_threshold)
-
+                                    exact_match=exact_match, semantic=semantic, semantic_model=semantic_model, vector_distance_threshold=vector_distance_threshold, hybrid_score_threshold=hybrid_score_threshold)
 
         log.info(f"waiting for session with ID {id}")
         # we need to keep the HTTP request open here until WebSocket messages mark the session done
