@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse, PlainTextResponse
 from jsonget import json_get, json_get_default
@@ -6,6 +7,7 @@ from typing import Optional
 import json
 import logging
 import requests
+import websockets
 
 from datetime import datetime
 from decouple import config
@@ -16,7 +18,9 @@ import subprocess
 import threading
 import time
 
-HA_URL = config('HA_URL', default="http://homeassistant.local:8123", cast=str)
+
+HA_URL_HTTP = config('HA_URL_HTTP', default="http://homeassistant.local:8123", cast=str)
+HA_URL_WS = config('HA_URL_WS', default="ws://homeassistant.local:8123", cast=str)
 HA_TOKEN = config('HA_TOKEN', default=None, cast=str)
 LOG_LEVEL = config('LOG_LEVEL', default="debug", cast=str)
 TGI_URL = config(f'TGI_URL', default=None, cast=str)
@@ -39,7 +43,7 @@ if RUN_MODE == "prod":
 
 
 # HA
-HA_TOKEN = f'Bearer {HA_TOKEN}'
+HA_TOKEN_HTTP = f'Bearer {HA_TOKEN}'
 
 # Default number of search results and attempts
 CORRECT_ATTEMPTS = config(
@@ -117,7 +121,7 @@ except:
 
 # Basic stuff we need
 ha_headers = {
-    "Authorization": HA_TOKEN,
+    "Authorization": HA_TOKEN_HTTP,
 }
 
 # The real WAC MVP
@@ -210,6 +214,9 @@ def init_typesense():
 
 @app.on_event("startup")
 async def startup_event():
+    app.command_endpoint = HomeAssistantWebSocketEndpoint(app, HA_URL_WS, HA_TOKEN)
+    app.session_tracker = {}
+
     if RUN_MODE == "prod":
         log.info('Starting Typesense')
         start_typesense()
@@ -224,7 +231,7 @@ def add_ha_entities():
     log.info('Adding entities from HA')
     entity_types = ['cover.', 'fan.', 'light.', 'switch.']
 
-    url = f"{HA_URL}/api/states"
+    url = f"{HA_URL_HTTP}/api/states"
 
     response = requests.get(url, headers=ha_headers)
     entities = response.json()
@@ -409,6 +416,188 @@ def wac_add(command, rank=0.9, source='autolearn'):
     return learned
 
 
+class HomeAssistantCommand(BaseModel):
+    id: int = 0
+    initial_id: int = 0
+    command: str = None
+    distance: Optional[int] = SEARCH_DISTANCE,
+    token_match_threshold: Optional[int] = TOKEN_MATCH_THRESHOLD,
+    exact_match: Optional[bool] = False,
+    semantic: Optional[str] = TYPESENSE_SEMANTIC_MODE,
+    vector_distance_threshold: Optional[float] = VECTOR_DISTANCE_THRESHOLD,
+    hybrid_score_threshold: Optional[float] = HYBRID_SCORE_THRESHOLD,
+    semantic_model: Optional[str] = TYPESENSE_SEMANTIC_MODEL
+    learned: bool = False
+    speech: str = "Sorry, I can't find that command."
+    time_start: datetime = datetime.now()
+    done: bool = False
+
+class CommandEndpointConfigException(Exception):
+    """Raised when an the command endpoint configuration is invalid
+
+    Attributes:
+        msg -- error message
+    """
+
+    def __init__(self, msg="Command Endpoint configuration is invalid"):
+        self.msg = msg
+        super().__init__(self.msg)
+
+
+class CommandEndpointRuntimeException(Exception):
+    """"Raised when an exception occurs while contacting the command endpoint
+
+    Attributes:
+        msg -- error message
+    """
+
+    def __init__(self, msg="Runtime exception occured in Command Endpoint"):
+        self.msg = msg
+        super().__init__(self.msg)
+
+
+class CommandEndpointResult():
+    ok: bool = False
+    speech: str = ""
+
+    def __init__(self):
+        self.ok = False
+        self.speech = "Error!"
+
+
+class CommandEndpoint():
+    name = "WAC CommandEndpoint"
+    log = logging.getLogger("WAC")
+
+class HomeAssistantWebSocketEndpoint(CommandEndpoint):
+    name = "WAS Home Assistant WebSocket Endpoint"
+
+    def __init__(self, app, url, token):
+        self.app = app
+        self.url = url
+        self.token = token
+
+        self.haws = None
+
+        loop = asyncio.get_event_loop()
+        self.task = loop.create_task(self.connect())
+
+    async def connect(self):
+        while True:
+            try:
+                # deflate compression is enabled by default, making tcpdump difficult
+                async with websockets.connect(f"{self.url}/api/websocket", compression=None) as self.haws:
+                    while True:
+                        msg = await self.haws.recv()
+                        await self.cb_msg(msg)
+            except Exception as e:
+                self.log.info(f"{self.name}: exception occurred: {e}")
+                await asyncio.sleep(1)
+
+    async def cb_msg(self, msg):
+        # self.log.info(f"haws_cb: {self.app} {msg}")
+        msg = json.loads(msg)
+        self.log.info(f"msg from HA: {msg}")
+
+        msg_type = json_get(msg, "/type", str)
+
+        try:
+            if msg_type == "event":
+                id = json_get(msg, "/id")
+                ev_type = json_get(msg, "/event/type")
+                if ev_type == "intent-end":
+                    initial_id = app.session_tracker[id].initial_id
+                    response_type = json_get(msg, "/event/data/intent_output/response/response_type")
+                    if response_type != "error":
+                        speech = json_get_default(msg, "/event/data/intent_output/response/speech/plain/speech", "Success")
+
+                        if initial_id != 0:
+                            log.info(f"initial_id: {initial_id}")
+                            app.session_tracker[initial_id].speech = speech
+                            app.session_tracker[initial_id].done = True
+                            return
+
+                        learned = wac_add(app.session_tracker[id].command, rank=0.9, source='autolearn')
+
+                        if learned:
+                            speech = f"{speech} and learned command"
+
+                        app.session_tracker[id].speech = speech
+                        app.session_tracker[id].done = True
+
+                    else:
+                        if initial_id != 0:
+                            return
+                        # Do WAC Search
+                        log.info("initial failed - do WAC search")
+                        command = app.session_tracker[id].command
+                        distance = app.session_tracker[id].distance
+                        exact_match = app.session_tracker[id].exact_match
+                        hybrid_score_threshold = app.session_tracker[id].hybrid_score_threshold
+                        semantic = app.session_tracker[id].semantic
+                        semantic_model = app.session_tracker[id].semantic_model
+                        token_match_threshold = app.session_tracker[id].token_match_threshold
+                        vector_distance_threshold = app.session_tracker[id].vector_distance_threshold
+
+                        wac_success, wac_command = wac_search(command, exact_match=exact_match, distance=distance, num_results=CORRECT_ATTEMPTS, raw=False,
+                            token_match_threshold=token_match_threshold, semantic=semantic, semantic_model=semantic_model, vector_distance_threshold=vector_distance_threshold, hybrid_score_threshold=hybrid_score_threshold)
+
+                        if wac_success:
+                            log.info(
+                                f"Attempting WAC HA Intent Match with command '{wac_command}' from provided command '{command}'")
+
+                            ha_cmd = HomeAssistantCommand(command=wac_command, initial_id=id)
+
+
+                            newid = self.send({"text": ha_cmd.command})
+                            app.session_tracker[newid] = ha_cmd
+
+                        else:
+                            app.session_tracker[id].done = True
+
+            elif msg_type == "auth_required":
+                auth_msg = {
+                    "type": "auth",
+                    "access_token": self.token,
+                }
+                self.log.info(f"authenticating HA WebSocket connection: {auth_msg}")
+                await self.haws.send(json.dumps(auth_msg))
+
+        except Exception as e:
+            log.error(f"session_tracker: {self.app.session_tracker}")
+            log.error(f"error occured while parsing HA msg: {e}")
+            return
+
+
+    def parse_response(self, response):
+        return None
+
+    def send(self, jsondata):
+        id = int(time.time() * 1000)
+
+        if "language" in jsondata:
+            jsondata.pop("language")
+
+        out = {
+            'end_stage': 'intent',
+            'id': id,
+            'input': jsondata,
+            'start_stage': 'intent',
+            'type': 'assist_pipeline/run',
+        }
+
+        self.log.info(f"sending to HA WS: {out}")
+        asyncio.ensure_future(self.haws.send(json.dumps(out)))
+        return id
+
+    def stop(self):
+        self.log.info(f"stopping {self.name}")
+        self.task.cancel()
+
+
+
+
+
 # Request coming from proxy
 
 
@@ -417,41 +606,28 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
     log.info(
         f"Processing proxy request for command '{command}' with distance {distance} token match threshold {token_match_threshold} exact match {exact_match} semantic {semantic} with vector distance threshold {vector_distance_threshold} and hybrid threshold {hybrid_score_threshold}")
     # Init speech for when all else goes wrong
-    speech = "Sorry, I can't find that command."
-    # Default to command isn't learned
-    learned = False
 
-    # For logging
-    second_ha_time_milliseconds = None
-
-    url = f'{HA_URL}/api/conversation/process'
 
     try:
         log.info(f"Trying initial HA intent match '{command}'")
-        ha_data = {"text": command, "language": language}
-        time_start = datetime.now()
-        ha_response = requests.post(
-            url, headers=ha_headers, json=ha_data, timeout=(1, 10))
-        time_end = datetime.now()
-        ha_time = time_end - time_start
-        first_ha_time_milliseconds = ha_time.total_seconds() * 1000
-        ha_response = ha_response.json()
-        code = json_get_default(
-            ha_response, "/response/data/code", "intent_match")
 
-        if code == "no_intent_match":
-            log.info(f"No Initial HA Intent Match for command '{command}'")
-        else:
-            log.info(f"Initial HA Intent Match for command '{command}'")
-            learned = wac_add(command, rank=0.9, source='autolearn')
-            speech = json_get_default(
-                ha_response, "/response/speech/plain/speech", "Success")
-            # Set speech to HA response and return
-            log.info(f"Setting speech to HA response '{speech}'")
-            if learned is True:
-                speech = f"{speech} and learned command"
-            log.info('HA took ' + str(first_ha_time_milliseconds) + ' ms')
-            return speech
+        ha_data = {"text": command, "language": language}
+
+        ha_cmd = HomeAssistantCommand(
+            command=command,
+            distance=distance,
+            exact_match=exact_match,
+            hybrid_score_threshold=hybrid_score_threshold,
+            semantic=semantic,
+            semantic_model=semantic_model,
+            token_match_threshold=token_match_threshold,
+            vector_distance_threshold=vector_distance_threshold,
+        )
+
+        id = app.command_endpoint.send(ha_data)
+        app.session_tracker[id] = ha_cmd
+        return id
+
     except Exception as e:
         log.exception(f"WAC FAILED with {e}")
         return "Willow auto correct encountered an error!"
@@ -572,7 +748,16 @@ class PostProxyBody(BaseModel):
 
 
 @app.post("/api/proxy", summary="Proxy Willow Requests", response_description="WAC Response")
-async def api_post_proxy(body: PostProxyBody, distance: Optional[int] = SEARCH_DISTANCE, token_match_threshold: Optional[int] = TOKEN_MATCH_THRESHOLD, exact_match: Optional[bool] = False, semantic: Optional[str] = TYPESENSE_SEMANTIC_MODE, vector_distance_threshold: Optional[float] = VECTOR_DISTANCE_THRESHOLD, hybrid_score_threshold: Optional[float] = HYBRID_SCORE_THRESHOLD, semantic_model: Optional[str] = TYPESENSE_SEMANTIC_MODEL):
+async def api_post_proxy(
+    body: PostProxyBody,
+    distance: Optional[int] = SEARCH_DISTANCE,
+    token_match_threshold: Optional[int] = TOKEN_MATCH_THRESHOLD,
+    exact_match: Optional[bool] = False,
+    semantic: Optional[str] = TYPESENSE_SEMANTIC_MODE,
+    vector_distance_threshold: Optional[float] = VECTOR_DISTANCE_THRESHOLD,
+    hybrid_score_threshold: Optional[float] = HYBRID_SCORE_THRESHOLD,
+    semantic_model: Optional[str] = TYPESENSE_SEMANTIC_MODEL
+):
     try:
         time_start = datetime.now()
 
@@ -582,14 +767,22 @@ async def api_post_proxy(body: PostProxyBody, distance: Optional[int] = SEARCH_D
         elif semantic == "false":
             semantic = "off"
 
-        response = api_post_proxy_handler(body.text, body.language, distance=distance, token_match_threshold=token_match_threshold,
+        id = api_post_proxy_handler(body.text, body.language, distance=distance, token_match_threshold=token_match_threshold,
                                           exact_match=exact_match, semantic=semantic, semantic_model=semantic_model, vector_distance_threshold=vector_distance_threshold, hybrid_score_threshold=hybrid_score_threshold)
+
+
+        log.info(f"waiting for session with ID {id}")
+        # we need to keep the HTTP request open here until WebSocket messages mark the session done
+        # TODO: give up after XX seconds
+        while app.session_tracker[id].done != True:
+            await asyncio.sleep(0.01)
+
         time_end = datetime.now()
         search_time = time_end - time_start
         search_time_milliseconds = search_time.total_seconds() * 1000
         log.info('WAC proxy total time ' +
                  str(search_time_milliseconds) + ' ms')
-        return PlainTextResponse(content=response)
+        return PlainTextResponse(content=app.session_tracker[id].speech)
     except Exception as e:
         log.exception(f"Proxy failed with {e}")
         raise HTTPException(status_code=500, detail="WAC Proxy Failed")

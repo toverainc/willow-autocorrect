@@ -11,7 +11,7 @@ fi
 
 set -a
 
-if [ -z "$HA_URL" ] || [ -z "$HA_TOKEN" ];then
+if [ -z "$HA_URL_HTTP" ] || [ -z "$HA_URL_WS" ] || [ -z "$HA_TOKEN" ]; then
     echo "You need to create .env with at least HA_TOKEN and HA_URL - exiting"
     exit 1
 fi
