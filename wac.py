@@ -517,9 +517,10 @@ class HomeAssistantWebSocketEndpoint(CommandEndpoint):
                 ev_type = json_get(msg, "/event/type")
                 if ev_type == "intent-end":
                     initial_id = app.session_tracker[id].initial_id
-                    response_type = json_get(
-                        msg, "/event/data/intent_output/response/response_type")
-                    if response_type != "error":
+                    response_code = json_get(
+                        msg, "/event/data/intent_output/response/data/code")
+                    log.debug(f"HA response code {response_code}")
+                    if response_code != "no_intent_match":
                         speech = json_get_default(
                             msg, "/event/data/intent_output/response/speech/plain/speech", "Success")
 
