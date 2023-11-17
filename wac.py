@@ -18,13 +18,12 @@ import subprocess
 import threading
 import time
 
-
-HA_URL_HTTP = config(
-    'HA_URL_HTTP', default="http://homeassistant.local:8123", cast=str)
-HA_URL_WS = config(
-    'HA_URL_WS', default="ws://homeassistant.local:8123", cast=str)
+HA_HOST = config(
+    'HA_HOST', default="homeassistant.local", cast=str)
+HA_PORT = config(
+    'HA_PORT', default=8123, cast=int)
 HA_TOKEN = config('HA_TOKEN', default=None, cast=str)
-LOG_LEVEL = config('LOG_LEVEL', default="debug", cast=str)
+LOG_LEVEL = config('LOG_LEVEL', default="info", cast=str).upper()
 TGI_URL = config(f'TGI_URL', default=None, cast=str)
 
 # Typesense config vars
@@ -34,6 +33,7 @@ TYPESENSE_PORT = config('TYPESENSE_PORT', default=8108, cast=int)
 TYPESENSE_PROTOCOL = config('TYPESENSE_PROTOCOL', default='http', cast=str)
 TYPESENSE_SLOW_TIMEOUT = config(
     'TYPESENSE_SLOW_TIMEOUT', default=120, cast=int)
+TYPESENSE_THREADS = config('TYPESENSE_THREADS', default=8, cast=int)
 TYPESENSE_TIMEOUT = config('TYPESENSE_TIMEOUT', default=1, cast=int)
 
 # "Prod" vs "dev"
@@ -46,6 +46,9 @@ if RUN_MODE == "prod":
 
 # HA
 HA_TOKEN_HTTP = f'Bearer {HA_TOKEN}'
+
+HA_URL_HTTP = f"http://{HA_HOST}:{HA_PORT}"
+HA_URL_WS = f"ws://{HA_HOST}:{HA_PORT}"
 
 # Default number of search results and attempts
 CORRECT_ATTEMPTS = config(
@@ -89,6 +92,14 @@ logging.basicConfig(
     level=logging.INFO,
     datefmt='%Y-%m-%d %H:%M:%S')
 
+log = logging.getLogger("WAC")
+try:
+    log.setLevel(LOG_LEVEL)
+    log.info(f"Set log level {LOG_LEVEL}")
+except Exception as e:
+    log.exception(f"Set log level {LOG_LEVEL} failed with {e}")
+    pass
+
 # Typesense
 
 
@@ -100,7 +111,7 @@ def start_typesense():
 
     # Fix this in prod to use some kind of unique/user provided/etc key. Not that big of a deal but...
     job = ['/usr/local/sbin/typesense-server', '--data-dir=/app/data/ts',
-           f'--api-key={TYPESENSE_API_KEY}', '--log-dir=/dev/shm', '--thread-pool-size=8']
+           f'--api-key={TYPESENSE_API_KEY}', '--log-dir=/dev/shm', f'--thread-pool-size={TYPESENSE_THREADS}']
 
     # server thread will remain active as long as FastAPI thread is running
     thread = threading.Thread(name='typesense-server',
@@ -114,12 +125,6 @@ app = FastAPI(title="WAC Proxy",
               openapi_url="/openapi.json",
               docs_url="/",
               redoc_url="/redoc")
-
-log = logging.getLogger("WAC")
-try:
-    log.setLevel(LOG_LEVEL).upper()
-except:
-    pass
 
 # Basic stuff we need
 ha_headers = {
@@ -401,7 +406,7 @@ def wac_add(command, rank=0.9, source='autolearn'):
         # Get current time as int
         curr_dt = datetime.now()
         timestamp = int(round(curr_dt.timestamp()))
-        log.info(f"Current timestamp: {timestamp}")
+        log.debug(f"Current timestamp: {timestamp}")
         command_json = {
             'command': command,
             'rank': rank,
@@ -502,7 +507,7 @@ class HomeAssistantWebSocketEndpoint(CommandEndpoint):
     async def cb_msg(self, msg):
         # self.log.info(f"haws_cb: {self.app} {msg}")
         msg = json.loads(msg)
-        self.log.info(f"msg from HA: {msg}")
+        self.log.debug(f"Msg from HA: {msg}")
 
         msg_type = json_get(msg, "/type", str)
 
@@ -519,7 +524,7 @@ class HomeAssistantWebSocketEndpoint(CommandEndpoint):
                             msg, "/event/data/intent_output/response/speech/plain/speech", "Success")
 
                         if initial_id != 0:
-                            log.info(f"initial_id: {initial_id}")
+                            log.debug(f"initial_id: {initial_id}")
                             app.session_tracker[initial_id].speech = speech
                             app.session_tracker[initial_id].done = True
                             return
@@ -537,7 +542,8 @@ class HomeAssistantWebSocketEndpoint(CommandEndpoint):
                         if initial_id != 0:
                             return
                         # Do WAC Search
-                        log.info("initial failed - do WAC search")
+                        log.info(
+                            "Initial command failed HA intent match - doing WAC search")
                         command = app.session_tracker[id].command
                         distance = app.session_tracker[id].distance
                         exact_match = app.session_tracker[id].exact_match
@@ -568,13 +574,13 @@ class HomeAssistantWebSocketEndpoint(CommandEndpoint):
                     "type": "auth",
                     "access_token": self.token,
                 }
-                self.log.info(
-                    f"authenticating HA WebSocket connection: {auth_msg}")
+                self.log.debug(
+                    f"Authenticating HA WebSocket connection: {auth_msg}")
                 await self.haws.send(json.dumps(auth_msg))
 
         except Exception as e:
-            log.error(f"session_tracker: {self.app.session_tracker}")
-            log.error(f"error occured while parsing HA msg: {e}")
+            log.error(f"Session_tracker: {self.app.session_tracker}")
+            log.error(f"Error occurred while parsing HA msg: {e}")
             return
 
     def parse_response(self, response):
@@ -594,12 +600,12 @@ class HomeAssistantWebSocketEndpoint(CommandEndpoint):
             'type': 'assist_pipeline/run',
         }
 
-        self.log.info(f"sending to HA WS: {out}")
+        self.log.debug(f"Sending to HA WS: {out}")
         asyncio.ensure_future(self.haws.send(json.dumps(out)))
         return id
 
     def stop(self):
-        self.log.info(f"stopping {self.name}")
+        self.log.debug(f"Stopping {self.name}")
         self.task.cancel()
 
 
@@ -774,7 +780,7 @@ async def api_post_proxy(
         id = api_post_proxy_handler(body.text, body.language, distance=distance, token_match_threshold=token_match_threshold,
                                     exact_match=exact_match, semantic=semantic, semantic_model=semantic_model, vector_distance_threshold=vector_distance_threshold, hybrid_score_threshold=hybrid_score_threshold)
 
-        log.info(f"waiting for session with ID {id}")
+        log.debug(f"Waiting for session with ID {id}")
         # we need to keep the HTTP request open here until WebSocket messages mark the session done
         # TODO: give up after XX seconds
         while app.session_tracker[id].done != True:
