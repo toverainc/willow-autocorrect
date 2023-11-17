@@ -517,6 +517,7 @@ class HomeAssistantWebSocketEndpoint(CommandEndpoint):
                 ev_type = json_get(msg, "/event/type")
                 if ev_type == "intent-end":
                     initial_id = app.session_tracker[id].initial_id
+                    # TODO: Update this to use response_type and response_code no_intent_match
                     response_type = json_get(
                         msg, "/event/data/intent_output/response/response_type")
                     if response_type != "error":
