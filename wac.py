@@ -18,7 +18,7 @@ import time
 
 HA_URL = config('HA_URL', default="http://homeassistant.local:8123", cast=str)
 HA_TOKEN = config('HA_TOKEN', default=None, cast=str)
-LOG_LEVEL = config('LOG_LEVEL', default="debug", cast=str)
+LOG_LEVEL = config('LOG_LEVEL', default="debug", cast=str).upper()
 TGI_URL = config(f'TGI_URL', default=None, cast=str)
 
 # Typesense config vars
@@ -28,6 +28,7 @@ TYPESENSE_PORT = config('TYPESENSE_PORT', default=8108, cast=int)
 TYPESENSE_PROTOCOL = config('TYPESENSE_PROTOCOL', default='http', cast=str)
 TYPESENSE_SLOW_TIMEOUT = config(
     'TYPESENSE_SLOW_TIMEOUT', default=120, cast=int)
+TYPESENSE_THREADS = config('TYPESENSE_THREADS', default=8, cast=int)
 TYPESENSE_TIMEOUT = config('TYPESENSE_TIMEOUT', default=1, cast=int)
 
 # "Prod" vs "dev"
@@ -83,6 +84,15 @@ logging.basicConfig(
     level=logging.INFO,
     datefmt='%Y-%m-%d %H:%M:%S')
 
+log = logging.getLogger("WAC")
+try:
+    log.setLevel(LOG_LEVEL)
+    log.info(f"Set log level {LOG_LEVEL}")
+except Exception as e:
+    log.exception(f"Set log level {LOG_LEVEL} failed with {e}")
+    pass
+
+
 # Typesense
 
 
@@ -94,7 +104,7 @@ def start_typesense():
 
     # Fix this in prod to use some kind of unique/user provided/etc key. Not that big of a deal but...
     job = ['/usr/local/sbin/typesense-server', '--data-dir=/app/data/ts',
-           f'--api-key={TYPESENSE_API_KEY}', '--log-dir=/dev/shm']
+           f'--api-key={TYPESENSE_API_KEY}', '--log-dir=/dev/shm', f'--thread-pool-size={TYPESENSE_THREADS}']
 
     # server thread will remain active as long as FastAPI thread is running
     thread = threading.Thread(name='typesense-server',
@@ -108,12 +118,6 @@ app = FastAPI(title="WAC Proxy",
               openapi_url="/openapi.json",
               docs_url="/",
               redoc_url="/redoc")
-
-log = logging.getLogger("WAC")
-try:
-    log.setLevel(LOG_LEVEL).upper()
-except:
-    pass
 
 # Basic stuff we need
 ha_headers = {
@@ -391,7 +395,7 @@ def wac_add(command, rank=0.9, source='autolearn'):
         # Get current time as int
         curr_dt = datetime.now()
         timestamp = int(round(curr_dt.timestamp()))
-        log.info(f"Current timestamp: {timestamp}")
+        log.debug(f"Current timestamp: {timestamp}")
         command_json = {
             'command': command,
             'rank': rank,

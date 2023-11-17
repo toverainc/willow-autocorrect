@@ -10,7 +10,7 @@ LOG_LEVEL=${LOG_LEVEL:-info}
 
 RUN_MODE=${RUN_MODE:-prod}
 
-set +a
+set -a
 
 if [ "$RUN_MODE" == "dev" ]; then
     echo "Running in dev mode. Make sure you have Typesense started on host!"

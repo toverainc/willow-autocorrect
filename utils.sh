@@ -27,6 +27,7 @@ TYPESENSE_DIR=$WAC_DIR/data/ts
 
 WAC_PORT=${WAC_PORT:-9000}
 TYPESENSE_PORT=${TYPESENSE_PORT:-8108}
+TYPESENSE_THREADS=${TYPESENSE_THREADS:-8}
 
 # Just in case
 mkdir -p "$TYPESENSE_DIR"
@@ -76,7 +77,8 @@ typesense|ts)
     docker run --rm -it -p "$TYPESENSE_PORT":8108 \
         -v"$TYPESENSE_DIR":/data --name wac-ts "$TYPESENSE" \
         --data-dir /data \
-        --api-key="$TYPESENSE_API_KEY"
+        --api-key="$TYPESENSE_API_KEY" \
+        --thread-pool-size="$TYPESENSE_THREADS"
 ;;
 
 esac
