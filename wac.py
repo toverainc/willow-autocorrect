@@ -3,7 +3,7 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse, PlainTextResponse
 from jsonget import json_get, json_get_default
 from pydantic import BaseModel
-from typing import Optional
+from typing import Callable, Optional
 import json
 import logging
 import requests
@@ -428,6 +428,7 @@ class HomeAssistantCommand(BaseModel):
     id: int = 0
     initial_id: int = 0
     command: str = None
+    cb_response: Callable = None
     distance: Optional[int] = SEARCH_DISTANCE,
     token_match_threshold: Optional[int] = TOKEN_MATCH_THRESHOLD,
     exact_match: Optional[bool] = False,
@@ -509,68 +510,15 @@ class HomeAssistantWebSocketEndpoint(CommandEndpoint):
         msg = json.loads(msg)
         self.log.debug(f"Msg from HA: {msg}")
 
-        msg_type = json_get(msg, "/type", str)
+        id = json_get_default(msg, "/id", -1)
 
-        try:
-            if msg_type == "event":
-                id = json_get(msg, "/id")
-                ev_type = json_get(msg, "/event/type")
-                if ev_type == "intent-end":
-                    initial_id = app.session_tracker[id].initial_id
-                    # TODO: Update this to use response_type and response_code no_intent_match
-                    response_type = json_get(
-                        msg, "/event/data/intent_output/response/response_type")
-                    if response_type != "error":
-                        speech = json_get_default(
-                            msg, "/event/data/intent_output/response/speech/plain/speech", "Success")
+        if id != -1:
+            cb = app.session_tracker[id].cb_response
+            cb(msg)
 
-                        if initial_id != 0:
-                            log.debug(f"initial_id: {initial_id}")
-                            app.session_tracker[initial_id].speech = speech
-                            app.session_tracker[initial_id].done = True
-                            return
-
-                        learned = wac_add(
-                            app.session_tracker[id].command, rank=0.9, source='autolearn')
-
-                        if learned:
-                            speech = f"{speech} and learned command"
-
-                        app.session_tracker[id].speech = speech
-                        app.session_tracker[id].done = True
-
-                    else:
-                        if initial_id != 0:
-                            return
-                        # Do WAC Search
-                        log.info(
-                            "Initial command failed HA intent match - doing WAC search")
-                        command = app.session_tracker[id].command
-                        distance = app.session_tracker[id].distance
-                        exact_match = app.session_tracker[id].exact_match
-                        hybrid_score_threshold = app.session_tracker[id].hybrid_score_threshold
-                        semantic = app.session_tracker[id].semantic
-                        semantic_model = app.session_tracker[id].semantic_model
-                        token_match_threshold = app.session_tracker[id].token_match_threshold
-                        vector_distance_threshold = app.session_tracker[id].vector_distance_threshold
-
-                        wac_success, wac_command = wac_search(command, exact_match=exact_match, distance=distance, num_results=CORRECT_ATTEMPTS, raw=False,
-                                                              token_match_threshold=token_match_threshold, semantic=semantic, semantic_model=semantic_model, vector_distance_threshold=vector_distance_threshold, hybrid_score_threshold=hybrid_score_threshold)
-
-                        if wac_success:
-                            log.info(
-                                f"Attempting WAC HA Intent Match with command '{wac_command}' from provided command '{command}'")
-
-                            ha_cmd = HomeAssistantCommand(
-                                command=wac_command, initial_id=id)
-
-                            newid = self.send({"text": ha_cmd.command})
-                            app.session_tracker[newid] = ha_cmd
-
-                        else:
-                            app.session_tracker[id].done = True
-
-            elif msg_type == "auth_required":
+        else:
+            msg_type = json_get(msg, "/type", str)
+            if msg_type == "auth_required":
                 auth_msg = {
                     "type": "auth",
                     "access_token": self.token,
@@ -579,10 +527,6 @@ class HomeAssistantWebSocketEndpoint(CommandEndpoint):
                     f"Authenticating HA WebSocket connection: {auth_msg}")
                 await self.haws.send(json.dumps(auth_msg))
 
-        except Exception as e:
-            log.error(f"Session_tracker: {self.app.session_tracker}")
-            log.error(f"Error occurred while parsing HA msg: {e}")
-            return
 
     def parse_response(self, response):
         return None
@@ -610,6 +554,73 @@ class HomeAssistantWebSocketEndpoint(CommandEndpoint):
         self.task.cancel()
 
 
+def cb_ha_assist_pipeline(msg):
+    msg_type = json_get(msg, "/type", str)
+
+    try:
+        if msg_type == "event":
+            id = json_get(msg, "/id")
+            ev_type = json_get(msg, "/event/type")
+            if ev_type == "intent-end":
+                initial_id = app.session_tracker[id].initial_id
+                # TODO: Update this to use response_type and response_code no_intent_match
+                response_type = json_get(
+                    msg, "/event/data/intent_output/response/response_type")
+                if response_type != "error":
+                    speech = json_get_default(
+                        msg, "/event/data/intent_output/response/speech/plain/speech", "Success")
+
+                    if initial_id != 0:
+                        log.debug(f"initial_id: {initial_id}")
+                        app.session_tracker[initial_id].speech = speech
+                        app.session_tracker[initial_id].done = True
+                        return
+
+                    learned = wac_add(
+                        app.session_tracker[id].command, rank=0.9, source='autolearn')
+
+                    if learned:
+                        speech = f"{speech} and learned command"
+
+                    app.session_tracker[id].speech = speech
+                    app.session_tracker[id].done = True
+
+                else:
+                    if initial_id != 0:
+                        return
+                    # Do WAC Search
+                    log.info(
+                        "Initial command failed HA intent match - doing WAC search")
+                    command = app.session_tracker[id].command
+                    distance = app.session_tracker[id].distance
+                    exact_match = app.session_tracker[id].exact_match
+                    hybrid_score_threshold = app.session_tracker[id].hybrid_score_threshold
+                    semantic = app.session_tracker[id].semantic
+                    semantic_model = app.session_tracker[id].semantic_model
+                    token_match_threshold = app.session_tracker[id].token_match_threshold
+                    vector_distance_threshold = app.session_tracker[id].vector_distance_threshold
+
+                    wac_success, wac_command = wac_search(command, exact_match=exact_match, distance=distance, num_results=CORRECT_ATTEMPTS, raw=False,
+                                                            token_match_threshold=token_match_threshold, semantic=semantic, semantic_model=semantic_model, vector_distance_threshold=vector_distance_threshold, hybrid_score_threshold=hybrid_score_threshold)
+
+                    if wac_success:
+                        log.info(
+                            f"Attempting WAC HA Intent Match with command '{wac_command}' from provided command '{command}'")
+
+                        ha_cmd = HomeAssistantCommand(
+                            command=wac_command, initial_id=id)
+
+                        newid = self.send({"text": ha_cmd.command})
+                        app.session_tracker[newid] = ha_cmd
+
+                    else:
+                        app.session_tracker[id].done = True
+
+    except Exception as e:
+        log.error(f"Session_tracker: {self.app.session_tracker}")
+        log.error(f"Error occurred while parsing HA msg: {e}")
+        return
+
 # Request coming from proxy
 
 
@@ -626,6 +637,7 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
 
         ha_cmd = HomeAssistantCommand(
             command=command,
+            cb_response=cb_ha_assist_pipeline,
             distance=distance,
             exact_match=exact_match,
             hybrid_score_threshold=hybrid_score_threshold,
