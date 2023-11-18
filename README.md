@@ -45,7 +45,6 @@ Start things up:
 
 ```
 ./utils.sh build-docker # Builds WAC
-./utils.sh ts # Starts typesense as daemon
 ./utils.sh run # Starts WAC in foreground
 ```
 
