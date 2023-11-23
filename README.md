@@ -94,7 +94,7 @@ Our Typesense schema explicitly includes the default of spaces plus '.' and '-'.
 
 Overall this functionality can be configured with the Levenshtein distance matching API param `distance`, which we support providing dynamically. What is Levenshtein distance? It's a 70 year old way to figure out how many times you need to move letters around to make two sentences match. If it ain't broke don't fix it!
 
-There are also a variety of additional knobs to tune: look around line 110 in `wac.py` if you are interested - and that's just a start! Typesense is really on another level.
+There are also a variety of additional knobs to tune: look around line 277 in `wac.py` if you are interested - and that's just a start! Typesense is really on another level.
 
 We intend to incorporate early feedback to expose configuration parameters and improve defaults for when WAC is integrated with WAS. All configuration options in your browser with WAS and WAS Web UI.
 
@@ -133,31 +133,33 @@ This will populate the Typesense index with the commands you actually use - enab
 
 ### This thing is all over the place...
 
-Sometimes "smart" is too smart and then dumb. WAC has an interface at `http://your_machine_ip:9000/docs` where you can run a search with various parameters.
+Sometimes "smart" is too smart and then dumb. WAC has an interface at `http://your_machine_ip:9000/` where you can run a search with various parameters.
 The output provided is the raw result from typesense and very verbose.
 
-Search for "Turn-on eating room":
+Search for "turn-off the eating room":
 
 ```
 {
   "facet_counts": [],
-  "found": 6,
+  "found": 9,
   "hits": [
     {
       "document": {
-        "command": "turn on dining room.",
-        "id": "5",
-        "rank": 1,
-        "source": "autolearn"
+        "accuracy": 1,
+        "command": "turn off dining room.",
+        "id": "3",
+        "rank": 0.9,
+        "source": "autolearn",
+        "timestamp": 1700166884
       },
       "highlight": {
         "command": {
           "matched_tokens": [
             "turn",
-            "on",
+            "off",
             "room"
           ],
-          "snippet": "<mark>turn</mark> <mark>on</mark> dining <mark>room</mark>."
+          "snippet": "<mark>turn</mark> <mark>off</mark> dining <mark>room</mark>."
         }
       },
       "highlights": [
@@ -165,26 +167,40 @@ Search for "Turn-on eating room":
           "field": "command",
           "matched_tokens": [
             "turn",
-            "on",
+            "off",
             "room"
           ],
-          "snippet": "<mark>turn</mark> <mark>on</mark> dining <mark>room</mark>."
+          "snippet": "<mark>turn</mark> <mark>off</mark> dining <mark>room</mark>."
         }
       ],
-      "text_match": 1736172750663319600,
+      "hybrid_search_info": {
+        "rank_fusion_score": 1
+      },
+      "text_match": 1060320051,
       "text_match_info": {
-        "best_field_score": "3315670777856",
-        "best_field_weight": 15,
-        "fields_matched": 1,
-        "score": "1736172750663319673",
-        "tokens_matched": 3
-      }
+        "best_field_score": "517734",
+        "best_field_weight": 102,
+        "fields_matched": 3,
+        "score": "1060320051",
+        "tokens_matched": 0
+      },
+      "vector_distance": 0.22997838258743286
     }
-...etc
+  ],
+  "out_of": 9,
+  "page": 1,
+  "request_params": {
+    "collection_name": "commands",
+    "per_page": 1,
+    "q": "turn-off the eating room"
+  },
+  "search_cutoff": false,
+  "search_time_ms": 9
+}
 ```
 
 The important thing to look for is the `text_match_info/tokens_matched` field, which is what we use for the `TOKEN_MATCH_THRESHOLD` above.
-This can give you an idea of how to tune this thing for whatever your actual experience is.
+This can give you an idea of how to tune this thing for whatever your actual experience is. Depending on your configuration and search criteria we will also factor in `hybrid_search_info/rank_fusion_score` and/or `vector_distance`.
 
 ### Resource Utilization and Performance
 Resource utilization is very minimal. It's a complete non-issue unless you have tons of commands and even then probably not a big deal.
@@ -210,7 +226,7 @@ Typesense tuning. One example: for instant responsiveness of learned commands we
 Our configured matching criteria includes the stuff above plus a user defined rank.
 This is a float value that can be attached to a command to heavily weight matching priority in addition to the fuzzy distance matching and semantic search.
 
-This will be integrated in the WAS Web UI.
+This will be integrated in the WAS Web UI. It can be used for things like preferring a user-defined command over an auto-learned command, etc.
 
 ### Aliases
 Our typesense schema includes the concept of "aliases".
@@ -218,7 +234,7 @@ This lets you basically say "do all of your fancy stuff with whatever I add to t
 
 ### Accuracy
 Our schema also has the concept of "accuracy".
-For learned commands users thumbs up/thumbs down/re-arrange matches and we can use this to influence the match weighting as well.
+For learned commands users thumbs up/thumbs down/re-arrange matches and we can use this to influence the match weighting as well. We will expose this via the WAS Web UI.
 
 ### Getting Aggressive
 We currently only grab the first result from Typesense and retry HA once with it. We might want to tweak this.
@@ -228,10 +244,6 @@ See that Typesense output above? We can use those large scores, etc to do additi
 
 ### LLM Integration
 We have internal testing with various LLMs. Typesense and Langchain [can be integrated](https://python.langchain.com/docs/integrations/vectorstores/typesense?ref=typesense) so this will get really interesting.
-
-### Vector search accelerated with WIS
-Up to this point this all has been pretty simple in the grand scheme of things.
-We can leverage WIS accelerated text embedding models and vector search in Typesense and WAC.
 
 ### Multiple languages
 Not a problem, just need to get around to it.
