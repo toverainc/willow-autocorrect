@@ -79,6 +79,19 @@ TYPESENSE_SEMANTIC_MODE = config(
 COLLECTION = config(
     'COLLECTION', default='commands', cast=str)
 
+# "OpenAI" Configuration
+OPENAI_BASE_URL = config(
+    'OPENAI_BASE_URL', default="https://api.endpoints.anyscale.com/v1", cast=str)
+
+OPENAI_API_KEY = config(
+    'OPENAI_API_KEY', default="undefined", cast=str)
+
+OPENAI_MODEL = config(
+    'OPENAI_MODEL', default="HuggingFaceH4/zephyr-7b-beta", cast=str)
+
+COMMAND_NOT_FOUND = config(
+    'COMMAND_NOT_FOUND', default="Sorry, I can't find that command", cast=str)
+
 logging.basicConfig(
     format='%(asctime)s %(levelname)-8s %(message)s',
     level=logging.INFO,
@@ -92,6 +105,38 @@ except Exception as e:
     log.exception(f"Set log level {LOG_LEVEL} failed with {e}")
     pass
 
+
+# OpenAI
+if OPENAI_API_KEY != "undefined":
+    log.info(f"Initializing OpenAI Client")
+    from openai import OpenAI
+    openai_client = OpenAI(api_key=OPENAI_API_KEY, base_url=OPENAI_BASE_URL)
+else:
+    openai_client = None
+
+# OpenAI Chat
+
+
+def openai_chat(text, model=OPENAI_MODEL):
+    response = COMMAND_NOT_FOUND
+    if openai_client is not None:
+        try:
+            chat_completion = openai_client.chat.completions.create(
+                messages=[
+                    {
+                        "role": "user",
+                        "content": text,
+                    }
+                ],
+                model=model,
+            )
+            response = chat_completion.choices[0].message.content
+            # Make it friendly for TTS and display output
+            response = response.replace('\n', ' ').replace('\r', '')
+            log.info(f"Got OpenAI response '{response}")
+        except Exception as e:
+            log.info(f"OpenAI failed with '{e}")
+    return response
 
 # Typesense
 
@@ -421,7 +466,7 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
     log.info(
         f"Processing proxy request for command '{command}' with distance {distance} token match threshold {token_match_threshold} exact match {exact_match} semantic {semantic} with vector distance threshold {vector_distance_threshold} and hybrid threshold {hybrid_score_threshold}")
     # Init speech for when all else goes wrong
-    speech = "Sorry, I can't find that command."
+    speech = COMMAND_NOT_FOUND
     # Default to command isn't learned
     learned = False
 
@@ -496,7 +541,9 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
         except Exception as e:
             log.exception(f"WAC FAILED with {e}")
             return "Willow auto correct encountered an error!"
-
+    else:
+        # Attempt LLM/OpenAI
+        speech = openai_chat(command)
     if second_ha_time_milliseconds is not None:
         total_ha_time = first_ha_time_milliseconds + second_ha_time_milliseconds
     else:
