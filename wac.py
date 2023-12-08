@@ -114,6 +114,13 @@ if OPENAI_API_KEY != "undefined":
     log.info(f"Initializing OpenAI Client")
     from openai import OpenAI
     openai_client = OpenAI(api_key=OPENAI_API_KEY, base_url=OPENAI_BASE_URL)
+    models = openai_client.models.list()
+    if len(models.data) == 1:
+        FORCE_OPENAI_MODEL = models.data[0].id
+        log.info(
+            f"Only one model on OpenAI endpoint - forcing model '{FORCE_OPENAI_MODEL}'")
+    else:
+        FORCE_OPENAI_MODEL = None
 else:
     openai_client = None
 
@@ -123,6 +130,9 @@ else:
 def openai_chat(text, model=OPENAI_MODEL):
     log.info(f"OpenAI Chat request for text '{text}' and model '{model}'")
     response = COMMAND_NOT_FOUND
+    if FORCE_OPENAI_MODEL is not None:
+        log.info(f"Forcing model {FORCE_OPENAI_MODEL}")
+        model = FORCE_OPENAI_MODEL
     if openai_client is not None:
         try:
             chat_completion = openai_client.chat.completions.create(
