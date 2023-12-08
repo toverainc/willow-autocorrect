@@ -125,8 +125,6 @@ if OPENAI_API_KEY != "undefined":
         FORCE_OPENAI_MODEL = models.data[0].id
         log.info(
             f"Only one model on OpenAI endpoint - forcing model '{FORCE_OPENAI_MODEL}'")
-    else:
-        FORCE_OPENAI_MODEL = None
 else:
     openai_client = None
 
