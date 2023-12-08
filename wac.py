@@ -92,8 +92,13 @@ OPENAI_MODEL = config(
 OPENAI_SYSTEM_PROMPT = config(
     'OPENAI_SYSTEM_PROMPT', default="Keep your answers as short as possible.", cast=str)
 
+OPENAI_TEMPERATURE = config(
+    'OPENAI_TEMPERATURE', default=0, cast=float)
+
 COMMAND_NOT_FOUND = config(
     'COMMAND_NOT_FOUND', default="Sorry, I can't find that command", cast=str)
+
+FORCE_OPENAI_MODEL = None
 
 logging.basicConfig(
     format='%(asctime)s %(levelname)-8s %(message)s',
@@ -112,8 +117,9 @@ except Exception as e:
 # OpenAI
 if OPENAI_API_KEY != "undefined":
     log.info(f"Initializing OpenAI Client")
-    from openai import OpenAI
-    openai_client = OpenAI(api_key=OPENAI_API_KEY, base_url=OPENAI_BASE_URL)
+    import openai
+    openai_client = openai.OpenAI(
+        api_key=OPENAI_API_KEY, base_url=OPENAI_BASE_URL)
     models = openai_client.models.list()
     if len(models.data) == 1:
         FORCE_OPENAI_MODEL = models.data[0].id
@@ -128,11 +134,13 @@ else:
 
 
 def openai_chat(text, model=OPENAI_MODEL):
-    log.info(f"OpenAI Chat request for text '{text}' and model '{model}'")
+    log.info(f"OpenAI Chat request for text '{text}'")
     response = COMMAND_NOT_FOUND
     if FORCE_OPENAI_MODEL is not None:
-        log.info(f"Forcing model {FORCE_OPENAI_MODEL}")
+        log.info(f"Forcing model '{FORCE_OPENAI_MODEL}'")
         model = FORCE_OPENAI_MODEL
+    else:
+        log.info(f"Using model '{model}'")
     if openai_client is not None:
         try:
             chat_completion = openai_client.chat.completions.create(
@@ -147,7 +155,7 @@ def openai_chat(text, model=OPENAI_MODEL):
                     }
                 ],
                 model=model,
-                temperature=0.1,
+                temperature=OPENAI_TEMPERATURE,
             )
             response = chat_completion.choices[0].message.content
             # Make it friendly for TTS and display output
