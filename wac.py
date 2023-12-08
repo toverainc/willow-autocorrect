@@ -87,7 +87,10 @@ OPENAI_API_KEY = config(
     'OPENAI_API_KEY', default="undefined", cast=str)
 
 OPENAI_MODEL = config(
-    'OPENAI_MODEL', default="HuggingFaceH4/zephyr-7b-beta", cast=str)
+    'OPENAI_MODEL', default="meta-llama/Llama-2-70b-chat-hf", cast=str)
+
+OPENAI_SYSTEM_PROMPT = config(
+    'OPENAI_SYSTEM_PROMPT', default="Keep your answers as short as possible.", cast=str)
 
 COMMAND_NOT_FOUND = config(
     'COMMAND_NOT_FOUND', default="Sorry, I can't find that command", cast=str)
@@ -118,22 +121,28 @@ else:
 
 
 def openai_chat(text, model=OPENAI_MODEL):
+    log.info(f"OpenAI Chat request for text '{text}' and model '{model}'")
     response = COMMAND_NOT_FOUND
     if openai_client is not None:
         try:
             chat_completion = openai_client.chat.completions.create(
                 messages=[
                     {
+                        "role": "system",
+                        "content": OPENAI_SYSTEM_PROMPT,
+                    },
+                    {
                         "role": "user",
                         "content": text,
                     }
                 ],
                 model=model,
+                temperature=0.1,
             )
             response = chat_completion.choices[0].message.content
             # Make it friendly for TTS and display output
-            response = response.replace('\n', ' ').replace('\r', '')
-            log.info(f"Got OpenAI response '{response}")
+            response = response.replace('\n', ' ').replace('\r', '').lstrip()
+            log.info(f"Got OpenAI response '{response}'")
         except Exception as e:
             log.info(f"OpenAI failed with '{e}")
     return response
@@ -461,7 +470,7 @@ def wac_add(command, rank=0.9, source='autolearn'):
 # Request coming from proxy
 
 
-def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_match_threshold=TOKEN_MATCH_THRESHOLD, exact_match=False, semantic="off", semantic_model=TYPESENSE_SEMANTIC_MODEL, vector_distance_threshold=VECTOR_DISTANCE_THRESHOLD, hybrid_score_threshold=HYBRID_SCORE_THRESHOLD):
+def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_match_threshold=TOKEN_MATCH_THRESHOLD, exact_match=False, semantic="off", semantic_model=TYPESENSE_SEMANTIC_MODEL, vector_distance_threshold=VECTOR_DISTANCE_THRESHOLD, hybrid_score_threshold=HYBRID_SCORE_THRESHOLD, llm_model=OPENAI_MODEL):
 
     log.info(
         f"Processing proxy request for command '{command}' with distance {distance} token match threshold {token_match_threshold} exact match {exact_match} semantic {semantic} with vector distance threshold {vector_distance_threshold} and hybrid threshold {hybrid_score_threshold}")
@@ -543,7 +552,7 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
             return "Willow auto correct encountered an error!"
     else:
         # Attempt LLM/OpenAI
-        speech = openai_chat(command)
+        speech = openai_chat(command, model=llm_model)
     if second_ha_time_milliseconds is not None:
         total_ha_time = first_ha_time_milliseconds + second_ha_time_milliseconds
     else:
@@ -623,7 +632,7 @@ class PostProxyBody(BaseModel):
 
 
 @app.post("/api/proxy", summary="Proxy Willow Requests", response_description="WAC Response")
-async def api_post_proxy(body: PostProxyBody, distance: Optional[int] = SEARCH_DISTANCE, token_match_threshold: Optional[int] = TOKEN_MATCH_THRESHOLD, exact_match: Optional[bool] = False, semantic: Optional[str] = TYPESENSE_SEMANTIC_MODE, vector_distance_threshold: Optional[float] = VECTOR_DISTANCE_THRESHOLD, hybrid_score_threshold: Optional[float] = HYBRID_SCORE_THRESHOLD, semantic_model: Optional[str] = TYPESENSE_SEMANTIC_MODEL):
+async def api_post_proxy(body: PostProxyBody, distance: Optional[int] = SEARCH_DISTANCE, token_match_threshold: Optional[int] = TOKEN_MATCH_THRESHOLD, exact_match: Optional[bool] = False, semantic: Optional[str] = TYPESENSE_SEMANTIC_MODE, vector_distance_threshold: Optional[float] = VECTOR_DISTANCE_THRESHOLD, hybrid_score_threshold: Optional[float] = HYBRID_SCORE_THRESHOLD, semantic_model: Optional[str] = TYPESENSE_SEMANTIC_MODEL, llm_model: Optional[str] = OPENAI_MODEL):
     try:
         time_start = datetime.now()
 
@@ -634,7 +643,7 @@ async def api_post_proxy(body: PostProxyBody, distance: Optional[int] = SEARCH_D
             semantic = "off"
 
         response = api_post_proxy_handler(body.text, body.language, distance=distance, token_match_threshold=token_match_threshold,
-                                          exact_match=exact_match, semantic=semantic, semantic_model=semantic_model, vector_distance_threshold=vector_distance_threshold, hybrid_score_threshold=hybrid_score_threshold)
+                                          exact_match=exact_match, semantic=semantic, semantic_model=semantic_model, vector_distance_threshold=vector_distance_threshold, hybrid_score_threshold=hybrid_score_threshold, llm_model=llm_model)
         time_end = datetime.now()
         search_time = time_end - time_start
         search_time_milliseconds = search_time.total_seconds() * 1000
