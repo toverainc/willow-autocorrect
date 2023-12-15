@@ -39,6 +39,9 @@ if RUN_MODE == "prod":
     TYPESENSE_PROTOCOL = "http"
 
 
+# Provide user feedback for learned and corrected commands
+FEEDBACK = config(f'FEEDBACK', default=True, cast=bool)
+
 # HA
 HA_TOKEN = f'Bearer {HA_TOKEN}'
 
@@ -522,7 +525,7 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
                 ha_response, "/response/speech/plain/speech", "Success")
             # Set speech to HA response and return
             log.info(f"Setting speech to HA response '{speech}'")
-            if learned is True:
+            if learned is True and FEEDBACK is True:
                 speech = f"{speech} and learned command"
             log.info('HA took ' + str(first_ha_time_milliseconds) + ' ms')
             return speech
@@ -561,7 +564,8 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
             speech = json_get_default(
                 ha_response, "/response/speech/plain/speech", "Success")
             log.info(f"HA speech: '{speech}'")
-            speech = f"{speech} with corrected command {wac_command}"
+            if FEEDBACK is True:
+                speech = f"{speech} with corrected command {wac_command}"
             log.info(f"Setting final speech to '{speech}'")
         except Exception as e:
             log.exception(f"WAC FAILED with {e}")
