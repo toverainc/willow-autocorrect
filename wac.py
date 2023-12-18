@@ -96,7 +96,7 @@ OPENAI_SYSTEM_PROMPT = config(
     'OPENAI_SYSTEM_PROMPT', default="Keep your answers as short as possible.", cast=str)
 
 OPENAI_TEMPERATURE = config(
-    'OPENAI_TEMPERATURE', default=0, cast=float)
+    'OPENAI_TEMPERATURE', default=0.1, cast=float)
 
 COMMAND_NOT_FOUND = config(
     'COMMAND_NOT_FOUND', default="Sorry, I can't find that command", cast=str)
