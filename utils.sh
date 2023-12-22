@@ -54,7 +54,11 @@ freeze-requirements|fr)
 
 run|start)
     # Reachable WAC IP for the "default" interface
-    WAC_IP=$(ip route get 1.1.1.1 | grep -oP 'src \K\S+')
+    if [ ! "$WAC_IP" ]; then
+        WAC_IP=$(ip route get 1.1.1.1 | grep -oP 'src \K\S+')
+    fi
+
+    echo "WAC IP set to $WAC_IP"
 
     # Docker temp workaround for dev
     TYPESENSE_HOST=${TYPESENSE_HOST:-"$WAC_IP"}
