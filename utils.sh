@@ -20,7 +20,7 @@ fi
 TAG=${TAG:-latest}
 IMAGE=${IMAGE:-wac}
 
-TYPESENSE="typesense/typesense:0.25.1"
+TYPESENSE="typesense/typesense:0.25.2"
 TYPESENSE_API_KEY=${TYPESENSE_API_KEY:-testing}
 
 TYPESENSE_DIR=$WAC_DIR/data/ts
