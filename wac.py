@@ -516,7 +516,7 @@ def api_post_proxy_handler(command, language, distance=SEARCH_DISTANCE, token_ma
         code = json_get_default(
             ha_response, "/response/data/code", "intent_match")
 
-        if code == "no_intent_match":
+        if code in ["no_intent_match", "no_valid_targets"]:
             log.info(f"No Initial HA Intent Match for command '{command}'")
         else:
             log.info(f"Initial HA Intent Match for command '{command}'")
